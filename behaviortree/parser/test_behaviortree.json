@@ -1,0 +1,84 @@
+{
+	"EntryTask":{
+		"Type":"BehaviorDesigner.Runtime.Tasks.EntryTask",
+		"ID":0,
+		"Name":"Entry",
+		"Instant":true,
+		"Disabled":false
+	},
+	"RootTask":{
+		"Type":"BehaviorDesigner.Runtime.Tasks.Selector",
+		"ID":1,
+		"Name":"Selector",
+		"Instant":true,
+		"Disabled":false,
+		"BehaviorDesigner.Runtime.Tasks.AbortType,abortType":"None",
+		"Children":[{
+			"Type":"BehaviorDesigner.Runtime.Tasks.If",
+			"ID":2,
+			"Name":"If",
+			"Instant":true,
+			"Disabled":false,
+			"BehaviorDesigner.Runtime.Tasks.AbortType,abortType":"Both",
+			"Children":[{
+				"Type":"BehaviorDesigner.Runtime.Tasks.Role.MainRole.NeedFollowJoystick",
+				"ID":3,
+				"Name":"Need Follow Joystick",
+				"Instant":true,
+				"Disabled":false
+			},{
+				"Type":"BehaviorDesigner.Runtime.Tasks.Parallel",
+				"ID":4,
+				"Name":"Parallel",
+				"Instant":true,
+				"Disabled":false,
+				"BehaviorDesigner.Runtime.Tasks.AbortType,abortType":"None",
+				"Children":[{
+					"Type":"BehaviorDesigner.Runtime.Tasks.PlayAniForSync",
+					"ID":5,
+					"Name":"Play Ani For Sync",
+					"Instant":true,
+					"Disabled":false,
+					"String,AnimationName":"run",
+					"Data":{"Name":"huwenhai", "Age":1000, "Time":1.5},
+					"Boolean,isLoop":true
+				},{
+					"Type":"BehaviorDesigner.Runtime.Tasks.Role.MainRole.RoleFollowJoystick",
+					"ID":6,
+					"Name":"Role Follow Joystick",
+					"Instant":true,
+					"Disabled":false
+				},{
+					"Type":"BehaviorDesigner.Runtime.Tasks.Idle",
+					"ID":7,
+					"Name":"Idle",
+					"Instant":true,
+					"Disabled":true
+				}]
+			}]
+		},{
+			"Type":"BehaviorDesigner.Runtime.Tasks.Sequence",
+			"ID":8,
+			"Name":"Sequence",
+			"Instant":true,
+			"Disabled":false,
+			"BehaviorDesigner.Runtime.Tasks.AbortType,abortType":"None",
+			"Children":[{
+				"Type":"BehaviorDesigner.Runtime.Tasks.PlayAniForSync",
+				"ID":9,
+				"Name":"Play Ani For Sync",
+				"Instant":true,
+				"Disabled":false,
+				"String,AnimationName":"stand",
+				"Boolean,isLoop":true
+			},{
+				"Type":"BehaviorDesigner.Runtime.Tasks.Idle",
+				"ID":10,
+				"Name":"Idle",
+				"Instant":true,
+				"Disabled":false
+			}]
+		}]
+	},
+	"Variables":[]
+}
