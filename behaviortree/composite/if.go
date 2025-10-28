@@ -50,6 +50,11 @@ func (p *If) OnConditionalAbort(childIndex int) {
 	p.currentChildIndex = childIndex
 }
 
+func (p *If) OnCancelConditionalAbort() {
+	p.executionStatus = iface.Inactive
+	p.currentChildIndex = 0
+}
+
 func (p *If) OnEnd() {
 	p.executionStatus = iface.Inactive
 	p.currentChildIndex = 0
