@@ -13,8 +13,7 @@ type If struct {
 }
 
 func (p *If) OnStart() {
-	p.executionStatus = iface.Inactive
-	p.currentChildIndex = 0
+
 }
 
 func (p *If) MaxChildren() int {
@@ -52,6 +51,8 @@ func (p *If) OnConditionalAbort(childIndex int) {
 }
 
 func (p *If) OnEnd() {
+	p.executionStatus = iface.Inactive
+	p.currentChildIndex = 0
 	//p.Unit().Log().Trace("=====If	OnEnd=====")
 }
 
