@@ -11,6 +11,9 @@ func NewEmptyRuntimeEventHandle() *EmptyRuntimeEventHandle {
 	return &EmptyRuntimeEventHandle{}
 }
 
+func (p *EmptyRuntimeEventHandle) Close() {
+}
+
 func (p *EmptyRuntimeEventHandle) PostInitialize(behaviorTree iface.IBehaviorTree, nowtimestampInMilli int64) {
 }
 

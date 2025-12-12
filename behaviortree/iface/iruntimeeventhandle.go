@@ -1,6 +1,7 @@
 package iface
 
 type IRuntimeEventHandle interface {
+	Close()
 	PostInitialize(behaviorTree IBehaviorTree, nowtimestampInMilli int64)
 	//	树结束
 	PostOnComplete(behaviorTree IBehaviorTree, nowtimestampInMilli int64)
