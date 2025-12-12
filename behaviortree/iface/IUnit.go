@@ -7,4 +7,5 @@ import (
 type IUnit interface {
 	ID() int64
 	Log() rlog.ILogger
+	Name() string
 }

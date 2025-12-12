@@ -3,13 +3,19 @@ package runtime
 import "github.com/hushuoyouli/real-time-sync/rlog"
 
 type TestUnit struct {
-	log rlog.ILogger
+	log  rlog.ILogger
+	name string
 }
 
-func NewTestUnit() *TestUnit {
+func NewTestUnit(name string) *TestUnit {
 	return &TestUnit{
-		log: &rlog.SLogger{},
+		log:  &rlog.SLogger{},
+		name: name,
 	}
+}
+
+func (p *TestUnit) Name() string {
+	return p.name
 }
 
 func (p *TestUnit) ID() int64 {
