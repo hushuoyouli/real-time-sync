@@ -144,43 +144,47 @@ func TestKafkaCreateTopic(t *testing.T) {
 	t.Logf("正在向 Topic %s 发送消息...", topicName)
 	t.Logf("Writer 配置: AllowAutoTopicCreation=%v, Topic=%s", writer.AllowAutoTopicCreation, writer.Topic)
 
-	// 发送消息（如果 topic 不存在，会自动创建）
-	// 使用重试机制，因为 topic 自动创建需要时间进行元数据同步
-	var lastErr error
-	maxRetries := 5
-	retryDelay := 500 * time.Millisecond
+	// 策略：先尝试发送消息（这会触发 topic 自动创建）
+	// 如果失败，等待 topic 元数据同步完成后再重试
+	err = writer.WriteMessages(ctx,
+		kafka.Message{
+			Key:   []byte("test-key"),
+			Value: []byte("这是一条测试消息，用于触发自动创建 topic"),
+		},
+	)
 
-	for i := 0; i < maxRetries; i++ {
-		err = writer.WriteMessages(ctx,
-			kafka.Message{
-				Key:   []byte("test-key"),
-				Value: []byte("这是一条测试消息，用于触发自动创建 topic"),
-			},
-		)
-
-		if err == nil {
-			t.Logf("✓ 消息发送成功（尝试 %d/%d）", i+1, maxRetries)
-			lastErr = nil
-			break
-		}
-
-		lastErr = err
-		// 检查是否是 topic 不存在的错误
+	// 如果第一次发送失败，且是 topic 不存在的错误，等待元数据同步
+	if err != nil {
 		if kafkaErr, ok := err.(kafka.Error); ok && kafkaErr == kafka.UnknownTopicOrPartition {
-			if i < maxRetries-1 {
-				t.Logf("Topic 尚未就绪，等待 %v 后重试 (%d/%d)...", retryDelay, i+1, maxRetries)
-				time.Sleep(retryDelay)
-				// 每次重试增加等待时间
-				retryDelay = time.Duration(float64(retryDelay) * 1.5)
-				continue
-			}
-		} else {
-			// 其他错误，不重试
-			break
-		}
-	}
+			t.Logf("检测到 Topic 不存在错误，等待元数据同步...")
 
-	err = lastErr
+			// 等待 topic 创建并元数据同步完成（最多等待 5 秒）
+			if waitForTopicReady(conn, topicName, 5*time.Second, t) {
+				// Topic 已就绪，重试发送消息
+				t.Logf("Topic 元数据已同步，重试发送消息...")
+				err = writer.WriteMessages(ctx,
+					kafka.Message{
+						Key:   []byte("test-key"),
+						Value: []byte("这是一条测试消息，用于触发自动创建 topic"),
+					},
+				)
+				if err == nil {
+					t.Logf("✓ 等待元数据同步后，消息发送成功")
+				}
+			} else {
+				// 超时，但可能 topic 已经创建了，再尝试一次
+				t.Logf("等待超时，但尝试最后一次发送...")
+				err = writer.WriteMessages(ctx,
+					kafka.Message{
+						Key:   []byte("test-key"),
+						Value: []byte("这是一条测试消息，用于触发自动创建 topic"),
+					},
+				)
+			}
+		}
+	} else {
+		t.Logf("✓ 消息发送成功（第一次尝试）")
+	}
 
 	if err != nil {
 		t.Logf("发送消息失败: %v", err)
@@ -286,9 +290,9 @@ func TestKafkaCreateTopic(t *testing.T) {
 	t.Logf("✓ 消息发送成功！")
 
 verifyTopic:
-	// 等待一下，确保 topic 创建完成
-	t.Logf("等待 2 秒，确保 topic 创建完成...")
-	time.Sleep(2 * time.Second)
+	// 由于我们已经等待了元数据同步，这里只需要短暂等待确保完全就绪
+	t.Logf("验证 Topic 创建状态...")
+	time.Sleep(500 * time.Millisecond)
 
 	// 验证 topic 是否自动创建成功
 	allPartitions, err = conn.ReadPartitions()
@@ -314,6 +318,40 @@ verifyTopic:
 		t.Errorf("✗✗✗ 失败！Topic %s 未找到，自动创建可能未生效", topicName)
 		t.Logf("提示: 请检查 Kafka 配置，确保 KAFKA_AUTO_CREATE_TOPICS_ENABLE=true")
 	}
+}
+
+// 辅助函数：等待 topic 创建并元数据同步完成
+// 返回 true 表示 topic 已就绪，false 表示超时
+func waitForTopicReady(conn *kafka.Conn, topicName string, timeout time.Duration, t *testing.T) bool {
+	deadline := time.Now().Add(timeout)
+	checkInterval := 200 * time.Millisecond // 每 200ms 检查一次
+
+	t.Logf("等待 Topic %s 元数据同步完成（最多等待 %v）...", topicName, timeout)
+
+	for time.Now().Before(deadline) {
+		partitions, err := conn.ReadPartitions()
+		if err == nil {
+			for _, p := range partitions {
+				if p.Topic == topicName {
+					// Topic 存在，再等待一小段时间确保元数据完全同步
+					time.Sleep(300 * time.Millisecond)
+					t.Logf("✓ Topic %s 已创建并元数据同步完成", topicName)
+					return true
+				}
+			}
+		}
+
+		// 如果还没超时，继续等待
+		remaining := time.Until(deadline)
+		if remaining > checkInterval {
+			time.Sleep(checkInterval)
+		} else {
+			time.Sleep(remaining)
+		}
+	}
+
+	t.Logf("✗ 等待 Topic %s 超时（%v）", topicName, timeout)
+	return false
 }
 
 // 辅助函数：格式化 broker 地址
