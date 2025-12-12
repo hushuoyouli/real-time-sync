@@ -20,7 +20,7 @@ func Test_BehaviorTree_Parser(t *testing.T) {
 		return
 	}
 
-	behaviorTree := NewBehaviorTree(bytes, &TestUnit{}, NewClock(), NewDefaultRuntimeEventHandle())
+	behaviorTree := NewBehaviorTree(bytes, &TestUnit{}, NewClock(), NewDefaultRuntimeEventHandle(), "test")
 	behaviorTree.Enable()
 }
 
@@ -30,7 +30,7 @@ func Test_BehaviorTree_Enable(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	behaviorTree := NewBehaviorTree(bytes, &TestUnit{}, NewClock(), NewDefaultRuntimeEventHandle())
+	behaviorTree := NewBehaviorTree(bytes, &TestUnit{}, NewClock(), NewDefaultRuntimeEventHandle(), "test")
 	if err := behaviorTree.Enable(); err != nil {
 		t.Log(err)
 	}
