@@ -51,7 +51,7 @@ type BehaviorTree struct {
 	name       string
 }
 
-func NewBehaviorTree(config []byte, unit iface.IUnit, clock iface.IClock, runtimeEventHandle iface.IRuntimeEventHandle) *BehaviorTree {
+func NewBehaviorTree(config []byte, unit iface.IUnit, clock iface.IClock, runtimeEventHandle iface.IRuntimeEventHandle, name string) *BehaviorTree {
 	return &BehaviorTree{
 		taskList:           util.NewList[iface.ITask](20),
 		parentIndex:        util.NewList[int](20),
@@ -85,16 +85,12 @@ func NewBehaviorTree(config []byte, unit iface.IUnit, clock iface.IClock, runtim
 		initializeForBaseFlag: false,
 
 		extraParam: nil,
-		name:       "",
+		name:       name,
 	}
 }
 
 func (p *BehaviorTree) Name() string {
 	return p.name
-}
-
-func (p *BehaviorTree) SetName(name string) {
-	p.name = name
 }
 
 func (p *BehaviorTree) ExtraParam() interface{} {
