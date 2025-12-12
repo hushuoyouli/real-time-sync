@@ -48,6 +48,7 @@ type BehaviorTree struct {
 	initializeForBaseFlag bool
 
 	extraParam interface{}
+	name string
 }
 
 func NewBehaviorTree(config []byte, unit iface.IUnit, clock iface.IClock, runtimeEventHandle iface.IRuntimeEventHandle) *BehaviorTree {
@@ -84,7 +85,16 @@ func NewBehaviorTree(config []byte, unit iface.IUnit, clock iface.IClock, runtim
 		initializeForBaseFlag: false,
 
 		extraParam: nil,
+		name:"",
 	}
+}
+
+func (p *BehaviorTree) Name() string {
+	return p.name
+}
+
+func (p *BehaviorTree) SetName(name string) {
+	p.name = name
 }
 
 func (p *BehaviorTree) ExtraParam() interface{} {
