@@ -1,0 +1,24 @@
+{
+  // Go 测试参数配置
+  // 这些参数会在运行 go test 时自动添加
+  "go.testFlags": [
+    "-v",        // 详细输出
+    "-count=1"   // 禁用测试缓存，强制每次运行
+  ],
+  
+  // 可选：针对特定测试函数的参数
+  // "go.testFlags": ["-v", "-count=1", "-run", "TestKafkaCreateTopic"],
+  
+  // 可选：测试超时设置（秒）
+  "go.testTimeout": "30s",
+  
+  // 可选：测试覆盖率相关设置
+  "go.coverOnSave": false,
+  "go.coverOnSingleTest": false,
+  
+  // 可选：测试输出格式
+  "go.testEnvVars": {
+    // 可以在这里添加环境变量
+    // "KAFKA_BROKER": "localhost:9092"
+  }
+}
