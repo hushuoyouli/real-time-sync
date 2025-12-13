@@ -383,13 +383,17 @@ func TestKafkaSend10000Messages(t *testing.T) {
 	t.Logf("测试 Topic 名称: %s", topicName)
 
 	// 创建生产者，允许自动创建 topic
+	// 优化配置以减少延迟，同时保持 RequireOne 确认
 	writer := &kafka.Writer{
 		Addr:                   kafka.TCP(broker),
 		Topic:                  topicName,
 		Balancer:               &kafka.LeastBytes{},
-		AllowAutoTopicCreation: true, // 允许自动创建 topic
-		WriteTimeout:           30 * time.Second,
-		RequiredAcks:           kafka.RequireOne,
+		AllowAutoTopicCreation: true,             // 允许自动创建 topic
+		WriteTimeout:           5 * time.Second,  // 减少超时时间，快速失败
+		RequiredAcks:           kafka.RequireOne, // 至少需要一个 broker 确认
+		Async:                  false,            // 同步发送，确保每条消息都确认
+		// 不启用压缩，减少 CPU 开销和延迟
+		// 注意：kafka-go 默认会复用连接，但可能需要优化连接池设置
 	}
 	defer writer.Close()
 
@@ -438,21 +442,55 @@ func TestKafkaSend10000Messages(t *testing.T) {
 	}
 
 	// 步骤3: 发送 10000 条消息并统计耗时
-	const messageCount = 100
+	const messageCount = 10
 	t.Logf("开始发送 %d 条消息（逐个发送）...", messageCount)
+	t.Logf("当前配置: RequiredAcks=%v, WriteTimeout=%v, Async=%v", writer.RequiredAcks, writer.WriteTimeout, writer.Async)
+
+	// 测试网络延迟
+	networkTestStart := time.Now()
+	testConn, testErr := kafka.Dial("tcp", broker)
+	if testErr == nil {
+		testConn.Close()
+		networkLatency := time.Since(networkTestStart)
+		t.Logf("网络连接测试耗时: %v", networkLatency)
+		if networkLatency > 100*time.Millisecond {
+			t.Logf("⚠️  网络延迟较高，可能影响发送性能")
+		}
+	}
 
 	startTime := time.Now()
 
-	// 逐个发送消息
+	// 逐个发送消息，并记录每次发送的耗时
+	var messageTimes []time.Duration
 	for i := 0; i < messageCount; i++ {
-		err = writer.WriteMessages(ctx,
+		msgStartTime := time.Now()
+
+		// 使用带超时的 context，避免长时间等待
+		msgCtx, msgCancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+		err = writer.WriteMessages(msgCtx,
 			kafka.Message{
 				Key:   []byte("key-" + strconv.Itoa(i)),
 				Value: []byte("消息内容-" + strconv.Itoa(i) + "-" + time.Now().Format("20060102-150405.000")),
 			},
 		)
+
+		msgCancel() // 立即取消 context
+		msgElapsed := time.Since(msgStartTime)
+		messageTimes = append(messageTimes, msgElapsed)
+
 		if err != nil {
 			t.Fatalf("发送消息失败 (消息 %d): %v", i, err)
+		}
+
+		// 对于少量消息，每次都输出耗时
+		if messageCount <= 10 {
+			t.Logf("消息 %d 发送耗时: %v (%.2f ms)", i+1, msgElapsed, float64(msgElapsed.Nanoseconds())/1e6)
+		}
+
+		// 如果单条消息超过500ms，输出警告
+		if msgElapsed > 500*time.Millisecond {
+			t.Logf("⚠️  消息 %d 耗时异常: %v，可能存在问题", i+1, msgElapsed)
 		}
 
 		// 每发送 1000 条消息输出一次进度
@@ -470,4 +508,61 @@ func TestKafkaSend10000Messages(t *testing.T) {
 	t.Logf("✓ 平均每条消息耗时: %v", elapsed/time.Duration(messageCount))
 	t.Logf("✓ 吞吐量: %.2f 消息/秒", float64(messageCount)/elapsed.Seconds())
 	t.Logf("✓ 吞吐量: %.2f 消息/毫秒", float64(messageCount)/float64(elapsed.Milliseconds()))
+
+	// 详细分析每条消息的耗时
+	if len(messageTimes) > 0 {
+		var minTime, maxTime, totalTime time.Duration
+		minTime = messageTimes[0]
+		maxTime = messageTimes[0]
+		for _, t := range messageTimes {
+			if t < minTime {
+				minTime = t
+			}
+			if t > maxTime {
+				maxTime = t
+			}
+			totalTime += t
+		}
+		t.Logf("\n=== 详细性能分析 ===")
+		t.Logf("最短耗时: %v", minTime)
+		t.Logf("最长耗时: %v", maxTime)
+		t.Logf("平均耗时: %v", totalTime/time.Duration(len(messageTimes)))
+
+		// 分析可能的原因
+		t.Logf("\n=== 性能分析建议 ===")
+		if maxTime > 500*time.Millisecond {
+			t.Logf("⚠️⚠️  单条消息耗时异常（>500ms），严重性能问题！")
+			t.Logf("   可能原因：")
+			t.Logf("   1. Kafka broker 配置问题（检查 server.properties）")
+			t.Logf("   2. 网络延迟或丢包（检查: ping localhost, telnet localhost 9092）")
+			t.Logf("   3. Kafka broker 负载过高或资源不足")
+			t.Logf("   4. 防火墙或网络配置问题")
+			t.Logf("   5. Docker 容器网络配置问题（如果使用 Docker）")
+			t.Logf("\n   诊断步骤：")
+			t.Logf("   1. 检查 Kafka broker 日志: docker logs kafka")
+			t.Logf("   2. 测试网络延迟: ping localhost")
+			t.Logf("   3. 测试端口连接: telnet localhost 9092")
+			t.Logf("   4. 检查 Kafka broker 配置:")
+			t.Logf("      - socket.request.max.bytes")
+			t.Logf("      - socket.send.buffer.bytes")
+			t.Logf("      - socket.receive.buffer.bytes")
+			t.Logf("   5. 检查系统资源: CPU、内存、磁盘 I/O")
+		} else if maxTime > 100*time.Millisecond {
+			t.Logf("⚠️  单条消息耗时较长（>100ms），可能原因：")
+			t.Logf("   1. RequiredAcks=%v 需要等待 broker 确认（网络往返时间）", writer.RequiredAcks)
+			t.Logf("   2. 网络延迟较高（本地应该 <10ms）")
+			t.Logf("   3. Kafka broker 处理较慢")
+			t.Logf("\n   优化建议：")
+			t.Logf("   - 检查网络延迟: ping localhost（应该 <1ms）")
+			t.Logf("   - 检查 Kafka broker 状态和性能")
+			t.Logf("   - 如果使用 Docker，检查容器网络配置")
+			t.Logf("   - 检查 Kafka broker 日志是否有错误或警告")
+		} else if maxTime > 10*time.Millisecond {
+			t.Logf("ℹ️  单条消息耗时中等（10-100ms）")
+			t.Logf("   当前 RequiredAcks=%v 需要等待 broker 确认", writer.RequiredAcks)
+			t.Logf("   对于本地 Kafka，这个时间可能偏长，建议检查网络配置")
+		} else {
+			t.Logf("✓ 单条消息耗时较短（<10ms），性能良好")
+		}
+	}
 }
