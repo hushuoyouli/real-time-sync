@@ -179,6 +179,10 @@ func (p *KafkaRuntimeEventHandle) Close() {
 	p.conn.Close()
 }
 
+func (p *KafkaRuntimeEventHandle) sendMessage(msg kafka.Message) {
+	p.kafkaMessageChannel <- msg
+}
+
 // 等待topic就绪
 func (pt *KafkaRuntimeEventHandle) waitForTopicReady(timeout time.Duration) bool {
 	deadline := time.Now().Add(timeout)
