@@ -89,13 +89,57 @@ func (pt *KafkaRuntimeEventHandle) waitForTopicReady(timeout time.Duration) bool
 }
 
 func (p *KafkaRuntimeEventHandle) PostInitialize(behaviorTree iface.IBehaviorTree, nowtimestampInMilli int64) {
+	p.handle.PostInitialize(behaviorTree, nowtimestampInMilli)
 }
 
 func (p *KafkaRuntimeEventHandle) PostOnComplete(behaviorTree iface.IBehaviorTree, nowtimestampInMilli int64) {
+	p.handle.PostOnComplete(behaviorTree, nowtimestampInMilli)
 }
 
 func (p *KafkaRuntimeEventHandle) NewStack(behaviorTree iface.IBehaviorTree, data *iface.StackRuntimeData) {
+	p.handle.NewStack(behaviorTree, data)
 }
 
 func (p *KafkaRuntimeEventHandle) RemoveStack(behaviorTree iface.IBehaviorTree, data *iface.StackRuntimeData, nowtimestampInMilli int64) {
+	p.handle.RemoveStack(behaviorTree, data, nowtimestampInMilli)
+}
+
+func (p *KafkaRuntimeEventHandle) PreOnStart(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask) {
+	p.handle.PreOnStart(behaviorTree, taskRuntimeData, stackRuntimeData, task)
+}
+
+func (p *KafkaRuntimeEventHandle) PostOnUpdate(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, nowtimestampInMilli int64, status iface.TaskStatus) {
+	p.handle.PostOnUpdate(behaviorTree, taskRuntimeData, stackRuntimeData, task, nowtimestampInMilli, status)
+}
+
+func (p *KafkaRuntimeEventHandle) PostOnEnd(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, nowtimestampInMilli int64) {
+	p.handle.PostOnEnd(behaviorTree, taskRuntimeData, stackRuntimeData, task, nowtimestampInMilli)
+}
+
+func (p *KafkaRuntimeEventHandle) ActionPostOnStart(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, datas [][]byte) {
+	p.handle.ActionPostOnStart(behaviorTree, taskRuntimeData, stackRuntimeData, task, datas)
+}
+
+func (p *KafkaRuntimeEventHandle) ActionPostOnUpdate(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, nowtimestampInMilli int64, status iface.TaskStatus, datas [][]byte) {
+	p.handle.ActionPostOnUpdate(behaviorTree, taskRuntimeData, stackRuntimeData, task, nowtimestampInMilli, status, datas)
+}
+
+func (p *KafkaRuntimeEventHandle) ActionPostOnEnd(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, nowtimestampInMilli int64, datas [][]byte) {
+	p.handle.ActionPostOnEnd(behaviorTree, taskRuntimeData, stackRuntimeData, task, nowtimestampInMilli, datas)
+}
+
+func (p *KafkaRuntimeEventHandle) ParallelPreOnStart(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask) {
+	p.handle.ParallelPreOnStart(behaviorTree, taskRuntimeData, stackRuntimeData, task)
+}
+
+func (p *KafkaRuntimeEventHandle) ParallelPostOnEnd(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, nowtimestampInMilli int64) {
+	p.handle.ParallelPostOnEnd(behaviorTree, taskRuntimeData, stackRuntimeData, task, nowtimestampInMilli)
+}
+
+func (p *KafkaRuntimeEventHandle) ParallelAddChildStack(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, childStackRuntimeData *iface.StackRuntimeData) {
+	p.handle.ParallelAddChildStack(behaviorTree, taskRuntimeData, stackRuntimeData, task, childStackRuntimeData)
+}
+
+func (p *KafkaRuntimeEventHandle) ParallelRemoveChildStack(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, childStackRuntimeData *iface.StackRuntimeData, nowtimestampInMilli int64) {
+	p.handle.ParallelRemoveChildStack(behaviorTree, taskRuntimeData, stackRuntimeData, task, childStackRuntimeData, nowtimestampInMilli)
 }
