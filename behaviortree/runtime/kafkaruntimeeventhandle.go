@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/hushuoyouli/real-time-sync/behaviortree/iface"
@@ -17,8 +18,13 @@ type KafkaRuntimeEventHandle struct {
 	topicName string
 	broker    string
 	conn      *kafka.Conn
-	writer    *kafka.Writer
-	log       rlog.ILogger
+	//writer    *kafka.Writer
+	log rlog.ILogger
+
+	kafkaMessageChannel   chan kafka.Message
+	messageWriteWaitGroup sync.WaitGroup
+	messageWriteContext   context.Context
+	messageWriteCancel    context.CancelFunc
 }
 
 // 触发自动创建 topic的消息
@@ -58,14 +64,19 @@ func NewKafkaRuntimeEventHandle(handle iface.IRuntimeEventHandle, topicName stri
 
 	log.Tracef("正在向 Topic %s 发送消息...", topicName)
 	log.Tracef("Writer 配置: AllowAutoTopicCreation=%v, Topic=%s", writer.AllowAutoTopicCreation, writer.Topic)
+	messageWriteContext, messageWriteCancel := context.WithCancel(context.Background())
 
 	p := &KafkaRuntimeEventHandle{
 		handle:    handle,
 		topicName: topicName,
 		broker:    broker,
 		conn:      conn,
-		writer:    writer,
-		log:       log,
+		//writer:                writer,
+		log:                   log,
+		messageWriteWaitGroup: sync.WaitGroup{},
+		messageWriteContext:   messageWriteContext,
+		messageWriteCancel:    messageWriteCancel,
+		kafkaMessageChannel:   make(chan kafka.Message, 1000),
 	}
 
 	// 策略：先尝试发送消息（这会触发 topic 自动创建）
@@ -89,15 +100,39 @@ func NewKafkaRuntimeEventHandle(handle iface.IRuntimeEventHandle, topicName stri
 			return nil, err
 		}
 	}
+	p.messageWriteWaitGroup.Add(1)
 	createDuration := time.Since(startCreate)
 	log.Tracef("KafkaRuntimeEventHandle 创建 topic 的耗时: %v", createDuration)
+
+	go func() {
+		defer writer.Close()
+		defer p.messageWriteWaitGroup.Done()
+		stop := false
+		for {
+			if stop {
+				break
+			}
+			select {
+			case msg := <-p.kafkaMessageChannel:
+				err = writer.WriteMessages(p.messageWriteContext, msg)
+				if err != nil {
+					p.log.Errorf("发送消息失败: %v", err)
+				}
+			case <-p.messageWriteContext.Done():
+				stop = true
+			}
+		}
+	}()
 
 	//defer conn.Close()
 	return p, nil
 }
 
+// 这个函数因为在最后会等待写入最后一批的消息，会有延迟和阻塞，所以需要异步关闭
 func (p *KafkaRuntimeEventHandle) Close() {
-	p.writer.Close()
+	//p.writer.Close()
+	p.messageWriteCancel()
+	p.messageWriteWaitGroup.Wait()
 	p.conn.Close()
 }
 

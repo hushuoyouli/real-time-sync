@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -601,4 +602,196 @@ func TestKafkaSend10000Messages(t *testing.T) {
 			t.Logf("   批量发送 %d 条消息，平均每条 %v，吞吐量优秀", batchSize, avgPerMsg)
 		}
 	}
+}
+
+// TestKafkaFindOptimalBatchSize 测试不同批次大小，找出最佳批次大小
+func TestKafkaFindOptimalBatchSize(t *testing.T) {
+	// Kafka broker 地址
+	broker := "localhost:9092"
+
+	// 创建 Kafka 连接
+	conn, err := kafka.Dial("tcp", broker)
+	if err != nil {
+		t.Fatalf("连接 Kafka 失败: %v", err)
+	}
+	defer conn.Close()
+
+	t.Logf("成功连接到 Kafka")
+
+	// 测试不同的批次大小
+	batchSizes := []int{100, 500, 1000, 2000, 5000}
+	const messageCount = 10000
+	const testRuns = 2 // 每个批次大小测试2次，取平均值
+
+	type BatchResult struct {
+		BatchSize     int
+		TotalTime     time.Duration
+		AvgTimePerMsg time.Duration
+		Throughput    float64 // 消息/秒
+		BatchCount    int
+		AvgBatchTime  time.Duration
+	}
+
+	results := make([]BatchResult, 0, len(batchSizes))
+
+	for _, batchSize := range batchSizes {
+		separator := strings.Repeat("=", 80)
+		t.Logf("\n%s", separator)
+		t.Logf("测试批次大小: %d 条消息", batchSize)
+		t.Logf("%s", separator)
+
+		// 生成一个随机的 topic 名称
+		topicName := "test-batch-" + strconv.FormatInt(time.Now().UnixNano(), 10) + "-" + strconv.Itoa(batchSize)
+
+		// 创建 Writer
+		writer := &kafka.Writer{
+			Addr:                   kafka.TCP(broker),
+			Topic:                  topicName,
+			Balancer:               &kafka.LeastBytes{},
+			AllowAutoTopicCreation: true,
+			WriteTimeout:           30 * time.Second,
+			RequiredAcks:           kafka.RequireOne,
+			Async:                  false,
+			BatchSize:              1,
+			BatchTimeout:           0,
+			BatchBytes:             0,
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		defer cancel()
+
+		// 触发 topic 创建
+		err = writer.WriteMessages(ctx,
+			kafka.Message{
+				Key:   []byte("init"),
+				Value: []byte("初始化"),
+			},
+		)
+		if err != nil {
+			if kafkaErr, ok := err.(kafka.Error); ok && kafkaErr == kafka.UnknownTopicOrPartition {
+				waitForTopicReady(conn, topicName, 10*time.Second, t)
+				err = writer.WriteMessages(ctx,
+					kafka.Message{
+						Key:   []byte("init"),
+						Value: []byte("初始化"),
+					},
+				)
+			}
+			if err != nil {
+				t.Logf("⚠️  批次大小 %d: 初始化失败，跳过: %v", batchSize, err)
+				writer.Close()
+				continue
+			}
+		}
+
+		// 等待 topic 就绪
+		waitForTopicReady(conn, topicName, 5*time.Second, t)
+
+		var totalTime time.Duration
+		var totalBatches int
+
+		// 运行多次测试取平均值
+		for run := 0; run < testRuns; run++ {
+			startTime := time.Now()
+			batches := 0
+
+			for i := 0; i < messageCount; i += batchSize {
+				end := i + batchSize
+				if end > messageCount {
+					end = messageCount
+				}
+
+				messages := make([]kafka.Message, 0, end-i)
+				for j := i; j < end; j++ {
+					messages = append(messages, kafka.Message{
+						Key:   []byte("key-" + strconv.Itoa(j)),
+						Value: []byte("消息-" + strconv.Itoa(j)),
+					})
+				}
+
+				msgCtx, msgCancel := context.WithTimeout(context.Background(), 60*time.Second)
+				err = writer.WriteMessages(msgCtx, messages...)
+				msgCancel()
+
+				if err != nil {
+					t.Logf("⚠️  批次大小 %d, 运行 %d: 发送失败: %v", batchSize, run+1, err)
+					break
+				}
+
+				batches++
+			}
+
+			elapsed := time.Since(startTime)
+			totalTime += elapsed
+			totalBatches += batches
+
+			if run == 0 {
+				t.Logf("  运行 %d: 耗时 %v, 批次 %d", run+1, elapsed, batches)
+			}
+		}
+
+		writer.Close()
+
+		// 计算平均值
+		avgTime := totalTime / time.Duration(testRuns)
+		avgBatches := totalBatches / testRuns
+		avgTimePerMsg := avgTime / time.Duration(messageCount)
+		throughput := float64(messageCount) / avgTime.Seconds()
+		avgBatchTime := avgTime / time.Duration(avgBatches)
+
+		result := BatchResult{
+			BatchSize:     batchSize,
+			TotalTime:     avgTime,
+			AvgTimePerMsg: avgTimePerMsg,
+			Throughput:    throughput,
+			BatchCount:    avgBatches,
+			AvgBatchTime:  avgBatchTime,
+		}
+		results = append(results, result)
+
+		t.Logf("  平均总耗时: %v", avgTime)
+		t.Logf("  平均每条消息耗时: %v", avgTimePerMsg)
+		t.Logf("  吞吐量: %.2f 消息/秒", throughput)
+		t.Logf("  平均每批次耗时: %v", avgBatchTime)
+	}
+
+	// 输出对比结果
+	separator := strings.Repeat("=", 80)
+	lineSeparator := strings.Repeat("-", 80)
+	t.Logf("\n%s", separator)
+	t.Logf("批次大小性能对比总结")
+	t.Logf("%s", separator)
+	t.Logf("%-10s %-15s %-20s %-15s %-15s", "批次大小", "总耗时", "平均每条耗时", "吞吐量(消息/秒)", "平均批次耗时")
+	t.Logf("%s", lineSeparator)
+
+	bestThroughput := 0.0
+	bestBatchSize := 0
+	bestResult := BatchResult{}
+
+	for _, r := range results {
+		t.Logf("%-10d %-15v %-20v %-15.2f %-15v",
+			r.BatchSize, r.TotalTime, r.AvgTimePerMsg, r.Throughput, r.AvgBatchTime)
+		if r.Throughput > bestThroughput {
+			bestThroughput = r.Throughput
+			bestBatchSize = r.BatchSize
+			bestResult = r
+		}
+	}
+
+	t.Logf("%s", separator)
+	t.Logf("\n🏆 最佳批次大小建议:")
+	t.Logf("   批次大小: %d 条消息", bestBatchSize)
+	t.Logf("   总耗时: %v", bestResult.TotalTime)
+	t.Logf("   平均每条消息耗时: %v", bestResult.AvgTimePerMsg)
+	t.Logf("   吞吐量: %.2f 消息/秒 (最高)", bestResult.Throughput)
+	t.Logf("   平均每批次耗时: %v", bestResult.AvgBatchTime)
+	t.Logf("\n💡 建议:")
+	if bestBatchSize <= 1000 {
+		t.Logf("   - 对于实时性要求高的场景，建议使用较小的批次大小 (%d)", bestBatchSize)
+	} else if bestBatchSize <= 2000 {
+		t.Logf("   - 对于平衡性能和延迟的场景，建议使用中等批次大小 (%d)", bestBatchSize)
+	} else {
+		t.Logf("   - 对于高吞吐量场景，建议使用较大的批次大小 (%d)", bestBatchSize)
+	}
+	t.Logf("   - 批次大小 %d 提供了最佳的吞吐量性能", bestBatchSize)
 }
