@@ -35,7 +35,7 @@ func (p *EmptyRuntimeEventHandle) PostOnUpdate(behaviorTree iface.IBehaviorTree,
 
 }
 
-func (p *EmptyRuntimeEventHandle) PostOnEnd(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, nowtimestampInMilli int64) {
+func (p *EmptyRuntimeEventHandle) PostOnEnd(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, nowtimestampInMilli int64, status iface.TaskStatus) {
 
 }
 

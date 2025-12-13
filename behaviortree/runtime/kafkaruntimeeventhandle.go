@@ -263,8 +263,8 @@ func (p *KafkaRuntimeEventHandle) PostOnUpdate(behaviorTree iface.IBehaviorTree,
 	p.handle.PostOnUpdate(behaviorTree, taskRuntimeData, stackRuntimeData, task, nowtimestampInMilli, status)
 }
 
-func (p *KafkaRuntimeEventHandle) PostOnEnd(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, nowtimestampInMilli int64) {
-	p.handle.PostOnEnd(behaviorTree, taskRuntimeData, stackRuntimeData, task, nowtimestampInMilli)
+func (p *KafkaRuntimeEventHandle) PostOnEnd(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, nowtimestampInMilli int64, status iface.TaskStatus) {
+	p.handle.PostOnEnd(behaviorTree, taskRuntimeData, stackRuntimeData, task, nowtimestampInMilli, status)
 	p.sendMessage(nil, nowtimestampInMilli, "post_on_end", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //结束
 }
 

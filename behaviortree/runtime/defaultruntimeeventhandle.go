@@ -36,8 +36,8 @@ func (p *DefaultRuntimeEventHandle) PostOnUpdate(behaviorTree iface.IBehaviorTre
 	behaviorTree.Unit().Log().Tracef("在时间:%d 角色:%d 行为树:%d => 在时间:%d任务:%s:%d-%d在堆栈:%d,执行结果:%s\n", behaviorTree.Clock().TimesampInMill(), behaviorTree.Unit().ID(), behaviorTree.ID(), nowtimestampInMilli, task.CorrespondingType(), task.ID(), taskRuntimeData.ExecuteID, stackRuntimeData.StackID, status.ToString())
 }
 
-func (p *DefaultRuntimeEventHandle) PostOnEnd(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, nowtimestampInMilli int64) {
-	behaviorTree.Unit().Log().Tracef("在时间:%d 角色:%d 行为树:%d => 在时间:%d任务:%s:%d-%d离开堆栈:%d\n", behaviorTree.Clock().TimesampInMill(), behaviorTree.Unit().ID(), behaviorTree.ID(), nowtimestampInMilli, task.CorrespondingType(), task.ID(), taskRuntimeData.ExecuteID, stackRuntimeData.StackID)
+func (p *DefaultRuntimeEventHandle) PostOnEnd(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, nowtimestampInMilli int64, status iface.TaskStatus) {
+	behaviorTree.Unit().Log().Tracef("在时间:%d 角色:%d 行为树:%d => 在时间:%d任务:%s:%d-%d离开堆栈:%d,执行结果:%s\n", behaviorTree.Clock().TimesampInMill(), behaviorTree.Unit().ID(), behaviorTree.ID(), nowtimestampInMilli, task.CorrespondingType(), task.ID(), taskRuntimeData.ExecuteID, stackRuntimeData.StackID, status.ToString())
 }
 
 func (p *DefaultRuntimeEventHandle) ActionPostOnStart(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, datas [][]byte) {

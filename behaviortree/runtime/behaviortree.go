@@ -630,7 +630,7 @@ func (p *BehaviorTree) PopTask(taskIndex, stackIndex int, status iface.TaskStatu
 	taskRuntimeData := p.taskDatas[task.ID()]
 	stackData := p.getStackRuntimeData(stackIndex)
 	nowTimestamp := p.clock.TimesampInMill()
-	p.runtimeEventHandle.PostOnEnd(p, taskRuntimeData, stackData, task, nowTimestamp)
+	p.runtimeEventHandle.PostOnEnd(p, taskRuntimeData, stackData, task, nowTimestamp, status)
 
 	if task.IsImplementsIAction() {
 		action := task.(iface.IAction)

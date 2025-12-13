@@ -13,7 +13,7 @@ type IRuntimeEventHandle interface {
 	//	以下3个回调可以用于追踪树的执行
 	PreOnStart(behaviorTree IBehaviorTree, taskRuntimeData *TaskRuntimeData, stackRuntimeData *StackRuntimeData, task ITask)
 	PostOnUpdate(behaviorTree IBehaviorTree, taskRuntimeData *TaskRuntimeData, stackRuntimeData *StackRuntimeData, task ITask, nowtimestampInMilli int64, status TaskStatus) //	任何的任务每帧调用的结果
-	PostOnEnd(behaviorTree IBehaviorTree, taskRuntimeData *TaskRuntimeData, stackRuntimeData *StackRuntimeData, task ITask, nowtimestampInMilli int64)
+	PostOnEnd(behaviorTree IBehaviorTree, taskRuntimeData *TaskRuntimeData, stackRuntimeData *StackRuntimeData, task ITask, nowtimestampInMilli int64, status TaskStatus)    //	任务结束
 
 	//	需要同步的action的回调，同步需要
 	ActionPostOnStart(behaviorTree IBehaviorTree, taskRuntimeData *TaskRuntimeData, stackRuntimeData *StackRuntimeData, task ITask, datas [][]byte)

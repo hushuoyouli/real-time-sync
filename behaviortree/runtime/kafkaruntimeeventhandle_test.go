@@ -17,6 +17,14 @@ type MockBehaviorTree struct {
 	isRunning bool
 }
 
+func (m *MockBehaviorTree) Config() []byte {
+	return nil
+}
+
+func (m *MockBehaviorTree) Name() string {
+	return ""
+}
+
 func (m *MockBehaviorTree) ID() int64 {
 	return m.id
 }
@@ -220,7 +228,7 @@ func (m *MockRuntimeEventHandle) PostOnUpdate(behaviorTree iface.IBehaviorTree, 
 	m.PostOnUpdateCalled = true
 }
 
-func (m *MockRuntimeEventHandle) PostOnEnd(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, nowtimestampInMilli int64) {
+func (m *MockRuntimeEventHandle) PostOnEnd(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, nowtimestampInMilli int64, status iface.TaskStatus) {
 	m.PostOnEndCalled = true
 }
 
@@ -416,7 +424,7 @@ func TestKafkaRuntimeEventHandle_DelegationMethods(t *testing.T) {
 	}
 
 	// 测试 PostOnEnd
-	handle.PostOnEnd(mockBT, mockTaskRuntimeData, mockStackRuntimeData, mockTask, time.Now().UnixMilli())
+	handle.PostOnEnd(mockBT, mockTaskRuntimeData, mockStackRuntimeData, mockTask, time.Now().UnixMilli(), iface.Success)
 	if !mockHandle.PostOnEndCalled {
 		t.Error("PostOnEnd 应该委托给内部 handle")
 	}
@@ -553,7 +561,7 @@ func TestKafkaRuntimeEventHandle_SendMessage(t *testing.T) {
 	}
 
 	// 调用 sendMessage（由于是私有方法，在同一个包中可以访问）
-	handle.sendMessage(testMsg.Value, time.Now().UnixMilli(), "test")
+	handle.sendMessage(testMsg.Value, time.Now().UnixMilli(), "test", 0, "", "", 0)
 
 	// 从通道中读取消息并验证
 	select {
@@ -611,7 +619,7 @@ func TestKafkaRuntimeEventHandle_SendMessage_Multiple(t *testing.T) {
 			Key:   []byte("test-key"),
 			Value: []byte("test message " + string(rune(i+'0'))),
 		} */
-		handle.sendMessage([]byte("test message "+string(rune(i+'0'))), time.Now().UnixMilli(), "test")
+		handle.sendMessage([]byte("test message "+string(rune(i+'0'))), time.Now().UnixMilli(), "test", 0, "", "", 0)
 	}
 
 }
