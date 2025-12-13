@@ -14,4 +14,6 @@ type IBehaviorTree interface {
 	Clock() IClock
 
 	ExtraParam() interface{}
+	Name() string
+	Config() []byte
 }

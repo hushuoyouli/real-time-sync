@@ -188,13 +188,17 @@ func (p *KafkaRuntimeEventHandle) Close() {
 	p.conn.Close()
 }
 
-func (p *KafkaRuntimeEventHandle) sendMessage(content []byte, nowtimestampInMilli int64, eventType string) {
+func (p *KafkaRuntimeEventHandle) sendMessage(content []byte, nowtimestampInMilli int64, eventType string, behaviorTreeID int64, behaviorTreeName string, objectName string, objectID int64) {
 	p.kafkaMessageChannel <- kafka.Message{
 		Key:   []byte(p.topicName),
 		Value: content,
 		Headers: []kafka.Header{
-			{Key: "nowtimestampInMilli", Value: []byte(strconv.FormatInt(nowtimestampInMilli, 10))}, //事件发生的时间
-			{Key: "type", Value: []byte(eventType)},                                                 //事件类型
+			{Key: "nowtimestamp_milli", Value: []byte(strconv.FormatInt(nowtimestampInMilli, 10))}, //事件发生的时间
+			{Key: "type", Value: []byte(eventType)},                                                //事件类型
+			{Key: "behavior_tree_id", Value: []byte(strconv.FormatInt(behaviorTreeID, 10))},        //行为树的ID
+			{Key: "behavior_tree_name", Value: []byte(behaviorTreeName)},                           //行为树的名称
+			{Key: "object_name", Value: []byte(objectName)},                                        //对象的名称
+			{Key: "object_id", Value: []byte(strconv.FormatInt(objectID, 10))},                     //对象的ID
 		},
 	}
 }
@@ -232,6 +236,7 @@ func (pt *KafkaRuntimeEventHandle) waitForTopicReady(timeout time.Duration) bool
 
 func (p *KafkaRuntimeEventHandle) PostInitialize(behaviorTree iface.IBehaviorTree, nowtimestampInMilli int64) {
 	p.handle.PostInitialize(behaviorTree, nowtimestampInMilli)
+	p.sendMessage(behaviorTree.Config(), nowtimestampInMilli, "post_initialize", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //树初始化
 }
 
 func (p *KafkaRuntimeEventHandle) PostOnComplete(behaviorTree iface.IBehaviorTree, nowtimestampInMilli int64) {
