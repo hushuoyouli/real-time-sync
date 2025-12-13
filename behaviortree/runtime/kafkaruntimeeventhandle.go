@@ -105,21 +105,64 @@ func NewKafkaRuntimeEventHandle(handle iface.IRuntimeEventHandle, topicName stri
 	log.Tracef("KafkaRuntimeEventHandle 创建 topic 的耗时: %v", createDuration)
 
 	go func() {
-		defer writer.Close()
 		defer p.messageWriteWaitGroup.Done()
+		defer writer.Close()
 		stop := false
+		msgCount := 0
+		msgCache := make([]kafka.Message, 0, 1000)
 		for {
 			if stop {
 				break
 			}
+
 			select {
 			case msg := <-p.kafkaMessageChannel:
-				err = writer.WriteMessages(p.messageWriteContext, msg)
-				if err != nil {
-					p.log.Errorf("发送消息失败: %v", err)
+				msgCache = append(msgCache, msg)
+				msgCount++
+				if msgCount >= 1000 {
+					err = writer.WriteMessages(p.messageWriteContext, msgCache...)
+					if err != nil {
+						p.log.Errorf("发送消息失败: %v", err)
+					}
+					msgCache = msgCache[:0]
+					msgCount = 0
 				}
+				// err = writer.WriteMessages(p.messageWriteContext, msg)
+				// if err != nil {
+				// 	p.log.Errorf("发送消息失败: %v", err)
+				// }
 			case <-p.messageWriteContext.Done():
 				stop = true
+			}
+		}
+
+		stop = false
+		for {
+			if stop {
+				break
+			}
+
+			select {
+			case msg := <-p.kafkaMessageChannel:
+				msgCache = append(msgCache, msg)
+				msgCount++
+				if msgCount >= 1000 {
+					err = writer.WriteMessages(p.messageWriteContext, msgCache...)
+					if err != nil {
+						p.log.Errorf("发送消息失败: %v", err)
+					}
+					msgCache = msgCache[:0]
+					msgCount = 0
+				}
+			default:
+				stop = true
+			}
+		}
+
+		if msgCount > 0 {
+			err = writer.WriteMessages(p.messageWriteContext, msgCache...)
+			if err != nil {
+				p.log.Errorf("发送消息失败: %v", err)
 			}
 		}
 	}()
