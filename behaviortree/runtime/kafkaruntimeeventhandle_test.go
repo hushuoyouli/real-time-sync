@@ -175,21 +175,21 @@ func (m *MockTask) SetVariables(variableConfigs map[string]interface{}) error {
 
 // MockRuntimeEventHandle 用于测试委托调用
 type MockRuntimeEventHandle struct {
-	PostInitializeCalled          bool
-	PostOnCompleteCalled          bool
-	NewStackCalled                bool
-	RemoveStackCalled             bool
-	PreOnStartCalled              bool
-	PostOnUpdateCalled            bool
-	PostOnEndCalled               bool
-	ActionPostOnStartCalled       bool
-	ActionPostOnUpdateCalled      bool
-	ActionPostOnEndCalled         bool
-	ParallelPreOnStartCalled      bool
-	ParallelPostOnEndCalled       bool
-	ParallelAddChildStackCalled   bool
+	PostInitializeCalled           bool
+	PostOnCompleteCalled           bool
+	NewStackCalled                 bool
+	RemoveStackCalled              bool
+	PreOnStartCalled               bool
+	PostOnUpdateCalled             bool
+	PostOnEndCalled                bool
+	ActionPostOnStartCalled        bool
+	ActionPostOnUpdateCalled       bool
+	ActionPostOnEndCalled          bool
+	ParallelPreOnStartCalled       bool
+	ParallelPostOnEndCalled        bool
+	ParallelAddChildStackCalled    bool
 	ParallelRemoveChildStackCalled bool
-	CloseCalled                   bool
+	CloseCalled                    bool
 }
 
 func (m *MockRuntimeEventHandle) Close() {
@@ -270,6 +270,7 @@ func TestNewKafkaRuntimeEventHandle_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("创建 KafkaRuntimeEventHandle 失败: %v", err)
 	}
+
 	defer handle.Close()
 
 	if handle == nil {
@@ -356,7 +357,11 @@ func TestKafkaRuntimeEventHandle_DelegationMethods(t *testing.T) {
 	if err != nil {
 		t.Fatalf("创建 KafkaRuntimeEventHandle 失败: %v", err)
 	}
-	defer handle.Close()
+	defer func() {
+		if handle != nil {
+			handle.Close()
+		}
+	}()
 
 	// 创建测试用的 mock 对象
 	mockUnit := NewTestUnit("test-unit")
@@ -364,7 +369,7 @@ func TestKafkaRuntimeEventHandle_DelegationMethods(t *testing.T) {
 	mockBT := &MockBehaviorTree{
 		id:    1,
 		unit:  mockUnit,
-		clock:  mockClock,
+		clock: mockClock,
 	}
 	mockTaskRuntimeData := &iface.TaskRuntimeData{}
 	mockStackRuntimeData := &iface.StackRuntimeData{}
@@ -517,4 +522,3 @@ func TestNewInitializeTopicMsg(t *testing.T) {
 		t.Errorf("消息 Value 应该是 '触发自动创建 topic'，但得到: %s", string(msg.Value))
 	}
 }
-
