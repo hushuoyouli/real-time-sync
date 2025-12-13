@@ -795,3 +795,124 @@ func TestKafkaFindOptimalBatchSize(t *testing.T) {
 	}
 	t.Logf("   - 批次大小 %d 提供了最佳的吞吐量性能", bestBatchSize)
 }
+
+// TestCountTopicMessages 统计指定 topic 中的消息数量
+func TestCountTopicMessages(t *testing.T) {
+	broker := "localhost:9092"
+	topicName := "test-send-multiple-20251213-185928.058"
+
+	// 创建 Kafka 连接
+	conn, err := kafka.Dial("tcp", broker)
+	if err != nil {
+		t.Fatalf("连接 Kafka 失败: %v", err)
+	}
+	defer conn.Close()
+
+	t.Logf("正在统计 Topic: %s 的消息数量...", topicName)
+
+	// 获取 topic 的所有分区
+	partitions, err := conn.ReadPartitions(topicName)
+	if err != nil {
+		t.Fatalf("获取分区信息失败: %v", err)
+	}
+
+	if len(partitions) == 0 {
+		t.Logf("Topic %s 不存在或没有分区", topicName)
+		return
+	}
+
+	t.Logf("Topic %s 有 %d 个分区", topicName, len(partitions))
+
+	totalMessages := int64(0)
+
+	// 遍历每个分区，获取 offset 信息
+	ctx := context.Background()
+	for _, partition := range partitions {
+		// 连接到特定分区
+		partitionConn, err := kafka.DialPartition(ctx, "tcp", broker, partition)
+		if err != nil {
+			t.Logf("连接分区 %d 失败: %v", partition.ID, err)
+			continue
+		}
+
+		// 获取分区的 offset 范围
+		firstOffset, lastOffset, err := partitionConn.ReadOffsets()
+		if err != nil {
+			t.Logf("读取分区 %d 的 offset 失败: %v", partition.ID, err)
+			partitionConn.Close()
+			continue
+		}
+
+		partitionMessages := lastOffset - firstOffset
+		totalMessages += partitionMessages
+
+		t.Logf("分区 %d: 第一个 offset=%d, 最后一个 offset=%d, 消息数量=%d",
+			partition.ID, firstOffset, lastOffset, partitionMessages)
+
+		// 尝试获取分区大小（如果支持）
+		// 注意：kafka-go 可能不直接支持获取分区大小，这里只是示例
+		partitionConn.Close()
+	}
+
+	t.Logf("\n=== 统计结果 ===")
+	t.Logf("Topic: %s", topicName)
+	t.Logf("总分区数: %d", len(partitions))
+	t.Logf("总消息数: %d", totalMessages)
+
+	// 如果需要更精确的统计，可以实际读取所有消息
+	if totalMessages > 0 && totalMessages < 100000 {
+		t.Logf("\n开始精确统计（读取所有消息）...")
+		preciseCount := countMessagesByReading(conn, topicName, broker, t)
+		if preciseCount >= 0 {
+			t.Logf("精确统计结果: %d 条消息", preciseCount)
+			if preciseCount != totalMessages {
+				t.Logf("注意: offset 统计 (%d) 与精确统计 (%d) 不一致，可能存在已删除的消息", totalMessages, preciseCount)
+			}
+		}
+	}
+}
+
+// countMessagesByReading 通过实际读取消息来精确统计
+func countMessagesByReading(conn *kafka.Conn, topicName, broker string, t *testing.T) int64 {
+	reader := kafka.NewReader(kafka.ReaderConfig{
+		Brokers:  []string{broker},
+		Topic:    topicName,
+		MinBytes: 10e3, // 10KB
+		MaxBytes: 10e6, // 10MB
+	})
+	defer reader.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	count := int64(0)
+	startTime := time.Now()
+
+	for {
+		_, err := reader.ReadMessage(ctx)
+		if err != nil {
+			if err == context.DeadlineExceeded {
+				break
+			}
+			// 检查是否是 EOF 或其他错误
+			if strings.Contains(err.Error(), "EOF") || strings.Contains(err.Error(), "timeout") {
+				break
+			}
+			t.Logf("读取消息时出错: %v", err)
+			break
+		}
+
+		count++
+		if count%10000 == 0 {
+			t.Logf("已读取 %d 条消息...", count)
+		}
+
+		// 如果超过 30 秒，停止读取
+		if time.Since(startTime) > 30*time.Second {
+			t.Logf("读取超时，已统计 %d 条消息", count)
+			break
+		}
+	}
+
+	return count
+}

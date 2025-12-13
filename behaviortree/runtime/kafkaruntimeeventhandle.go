@@ -53,7 +53,7 @@ func NewKafkaRuntimeEventHandle(handle iface.IRuntimeEventHandle, topicName stri
 		Balancer:               &kafka.CRC32Balancer{},
 		AllowAutoTopicCreation: true, // 允许自动创建 topic
 		WriteTimeout:           10 * time.Second,
-		RequiredAcks:           kafka.RequireAll,
+		RequiredAcks:           kafka.RequireNone,
 		BatchSize:              1, // 批量大小为1，立即发送
 		BatchTimeout:           0, // 不等待批量超时，立即发送（这是关键！）
 		BatchBytes:             0, // 不限制批量字节数
