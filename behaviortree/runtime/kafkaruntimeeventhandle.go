@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"strconv"
 	"sync"
 	"time"
@@ -256,7 +257,17 @@ func (p *KafkaRuntimeEventHandle) RemoveStack(behaviorTree iface.IBehaviorTree, 
 
 func (p *KafkaRuntimeEventHandle) PreOnStart(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask) {
 	p.handle.PreOnStart(behaviorTree, taskRuntimeData, stackRuntimeData, task)
-	p.sendMessage(nil, taskRuntimeData.StartTime, "pre_on_start", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //预开始
+	data := map[string]interface{}{
+		"task_id":    taskRuntimeData.TaskID,
+		"execute_id": taskRuntimeData.ExecuteID,
+	}
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		p.log.Errorf("序列化数据失败: %v", err)
+		return
+	}
+	p.sendMessage(jsonData, taskRuntimeData.StartTime, "pre_on_start", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //预开始
 }
 
 func (p *KafkaRuntimeEventHandle) PostOnUpdate(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, nowtimestampInMilli int64, status iface.TaskStatus) {
@@ -265,40 +276,133 @@ func (p *KafkaRuntimeEventHandle) PostOnUpdate(behaviorTree iface.IBehaviorTree,
 
 func (p *KafkaRuntimeEventHandle) PostOnEnd(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, nowtimestampInMilli int64, status iface.TaskStatus) {
 	p.handle.PostOnEnd(behaviorTree, taskRuntimeData, stackRuntimeData, task, nowtimestampInMilli, status)
-	p.sendMessage(nil, nowtimestampInMilli, "post_on_end", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //结束
+	data := map[string]interface{}{
+		"task_id":    taskRuntimeData.TaskID,
+		"execute_id": taskRuntimeData.ExecuteID,
+		"status":     status.ToString(),
+	}
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		p.log.Errorf("序列化数据失败: %v", err)
+		return
+	}
+	p.sendMessage(jsonData, nowtimestampInMilli, "post_on_end", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //结束
 }
 
 func (p *KafkaRuntimeEventHandle) ActionPostOnStart(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, datas [][]byte) {
 	p.handle.ActionPostOnStart(behaviorTree, taskRuntimeData, stackRuntimeData, task, datas)
-	p.sendMessage(nil, taskRuntimeData.StartTime, "action_post_on_start", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //动作开始
+	data := map[string]interface{}{
+		"task_id":    taskRuntimeData.TaskID,
+		"execute_id": taskRuntimeData.ExecuteID,
+		"datas":      datas,
+		"stack_id":   stackRuntimeData.StackID,
+	}
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		p.log.Errorf("序列化数据失败: %v", err)
+		return
+	}
+	p.sendMessage(jsonData, taskRuntimeData.StartTime, "action_post_on_start", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //动作开始
 }
 
 func (p *KafkaRuntimeEventHandle) ActionPostOnUpdate(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, nowtimestampInMilli int64, status iface.TaskStatus, datas [][]byte) {
 	p.handle.ActionPostOnUpdate(behaviorTree, taskRuntimeData, stackRuntimeData, task, nowtimestampInMilli, status, datas)
-	p.sendMessage(nil, nowtimestampInMilli, "action_post_on_update", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //动作更新
+	if len(datas) > 0 {
+		data := map[string]interface{}{
+			"task_id":    taskRuntimeData.TaskID,
+			"execute_id": taskRuntimeData.ExecuteID,
+			"datas":      datas,
+			"stack_id":   stackRuntimeData.StackID,
+		}
+		jsonData, err := json.Marshal(data)
+		if err != nil {
+			p.log.Errorf("序列化数据失败: %v", err)
+			return
+		}
+		p.sendMessage(jsonData, nowtimestampInMilli, "action_post_on_update", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //动作更新
+	}
 }
 
 func (p *KafkaRuntimeEventHandle) ActionPostOnEnd(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, nowtimestampInMilli int64, datas [][]byte) {
 	p.handle.ActionPostOnEnd(behaviorTree, taskRuntimeData, stackRuntimeData, task, nowtimestampInMilli, datas)
 	p.sendMessage(nil, nowtimestampInMilli, "action_post_on_end", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //动作结束
+	//if len(datas) > 0 {
+	data := map[string]interface{}{
+		"task_id":    taskRuntimeData.TaskID,
+		"execute_id": taskRuntimeData.ExecuteID,
+		"datas":      datas,
+		"stack_id":   stackRuntimeData.StackID,
+	}
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		p.log.Errorf("序列化数据失败: %v", err)
+		return
+	}
+	p.sendMessage(jsonData, nowtimestampInMilli, "action_post_on_end", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //动作结束
 }
 
 func (p *KafkaRuntimeEventHandle) ParallelPreOnStart(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask) {
 	p.handle.ParallelPreOnStart(behaviorTree, taskRuntimeData, stackRuntimeData, task)
-	p.sendMessage(nil, taskRuntimeData.StartTime, "parallel_pre_on_start", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //并发任务开始
+	data := map[string]interface{}{
+		"task_id":    taskRuntimeData.TaskID,
+		"execute_id": taskRuntimeData.ExecuteID,
+		"stack_id":   stackRuntimeData.StackID,
+	}
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		p.log.Errorf("序列化数据失败: %v", err)
+		return
+	}
+	p.sendMessage(jsonData, taskRuntimeData.StartTime, "parallel_pre_on_start", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //并发任务开始
 }
 
 func (p *KafkaRuntimeEventHandle) ParallelPostOnEnd(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, nowtimestampInMilli int64) {
 	p.handle.ParallelPostOnEnd(behaviorTree, taskRuntimeData, stackRuntimeData, task, nowtimestampInMilli)
-	p.sendMessage(nil, nowtimestampInMilli, "parallel_post_on_end", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //并发任务结束
+	data := map[string]interface{}{
+		"task_id":    taskRuntimeData.TaskID,
+		"execute_id": taskRuntimeData.ExecuteID,
+		"stack_id":   stackRuntimeData.StackID,
+	}
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		p.log.Errorf("序列化数据失败: %v", err)
+		return
+	}
+
+	p.sendMessage(jsonData, nowtimestampInMilli, "parallel_post_on_end", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //并发任务结束
 }
 
 func (p *KafkaRuntimeEventHandle) ParallelAddChildStack(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, childStackRuntimeData *iface.StackRuntimeData) {
 	p.handle.ParallelAddChildStack(behaviorTree, taskRuntimeData, stackRuntimeData, task, childStackRuntimeData)
-	p.sendMessage([]byte(strconv.FormatInt(int64(childStackRuntimeData.StackID), 10)), behaviorTree.Clock().TimesampInMill(), "parallel_add_child_stack", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //并发任务增加子栈
+	data := map[string]interface{}{
+		"task_id":        taskRuntimeData.TaskID,
+		"execute_id":     taskRuntimeData.ExecuteID,
+		"stack_id":       stackRuntimeData.StackID,
+		"child_stack_id": childStackRuntimeData.StackID,
+	}
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		p.log.Errorf("序列化数据失败: %v", err)
+		return
+	}
+	p.sendMessage(jsonData, behaviorTree.Clock().TimesampInMill(), "parallel_add_child_stack", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //并发任务增加子栈
 }
 
 func (p *KafkaRuntimeEventHandle) ParallelRemoveChildStack(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, childStackRuntimeData *iface.StackRuntimeData, nowtimestampInMilli int64) {
 	p.handle.ParallelRemoveChildStack(behaviorTree, taskRuntimeData, stackRuntimeData, task, childStackRuntimeData, nowtimestampInMilli)
-	p.sendMessage([]byte(strconv.FormatInt(int64(childStackRuntimeData.StackID), 10)), nowtimestampInMilli, "parallel_remove_child_stack", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //并发任务删除子栈
+	data := map[string]interface{}{
+		"task_id":        taskRuntimeData.TaskID,
+		"execute_id":     taskRuntimeData.ExecuteID,
+		"stack_id":       stackRuntimeData.StackID,
+		"child_stack_id": childStackRuntimeData.StackID,
+	}
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		p.log.Errorf("序列化数据失败: %v", err)
+		return
+	}
+	p.sendMessage(jsonData, nowtimestampInMilli, "parallel_remove_child_stack", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //并发任务删除子栈
 }
