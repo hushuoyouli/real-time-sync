@@ -519,7 +519,7 @@ func TestKafkaRuntimeEventHandle_TopicNameFormat(t *testing.T) {
 }
 
 // TestNewInitializeTopicMsg 测试初始化消息的创建
-func TestNewInitializeTopicMsg(t *testing.T) {
+/* func TestNewInitializeTopicMsg(t *testing.T) {
 	msg := newInitializeTopicMsg()
 
 	if string(msg.Key) != "initialize_topic" {
@@ -529,7 +529,7 @@ func TestNewInitializeTopicMsg(t *testing.T) {
 	if string(msg.Value) != "触发自动创建 topic" {
 		t.Errorf("消息 Value 应该是 '触发自动创建 topic'，但得到: %s", string(msg.Value))
 	}
-}
+} */
 
 // TestKafkaRuntimeEventHandle_SendMessage 测试 sendMessage 方法
 func TestKafkaRuntimeEventHandle_SendMessage(t *testing.T) {

@@ -30,12 +30,6 @@ type KafkaRuntimeEventHandle struct {
 }
 
 // 触发自动创建 topic的消息
-func newInitializeTopicMsg() kafka.Message {
-	return kafka.Message{
-		Key:   []byte("initialize_topic"),
-		Value: []byte("触发自动创建 topic"),
-	}
-}
 
 // topicName,可以是场景的名字，或者是一场战斗的名字，系统自动加上时间
 // broker,可以是kafka的地址等等
@@ -83,7 +77,7 @@ func NewKafkaRuntimeEventHandle(handle iface.IRuntimeEventHandle, topicName stri
 
 	// 策略：先尝试发送消息（这会触发 topic 自动创建）
 	startCreate := time.Now()
-	err = writer.WriteMessages(ctx, newInitializeTopicMsg())
+	err = writer.WriteMessages(ctx, p.newInitializeTopicMsg())
 	if err != nil {
 		if kafkaErr, ok := err.(kafka.Error); ok && kafkaErr == kafka.UnknownTopicOrPartition {
 			log.Tracef("检测到 Topic 不存在错误，等待元数据同步...")
@@ -179,6 +173,13 @@ func NewKafkaRuntimeEventHandle(handle iface.IRuntimeEventHandle, topicName stri
 
 	//defer conn.Close()
 	return p, nil
+}
+
+func (p *KafkaRuntimeEventHandle) newInitializeTopicMsg() kafka.Message {
+	return kafka.Message{
+		Key:   []byte(p.topicName),
+		Value: []byte("initialize_topic"),
+	}
 }
 
 // 这个函数因为在最后会等待写入最后一批的消息，会有延迟和阻塞，所以需要异步关闭
