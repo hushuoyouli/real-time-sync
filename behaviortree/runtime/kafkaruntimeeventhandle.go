@@ -256,6 +256,7 @@ func (p *KafkaRuntimeEventHandle) RemoveStack(behaviorTree iface.IBehaviorTree, 
 
 func (p *KafkaRuntimeEventHandle) PreOnStart(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask) {
 	p.handle.PreOnStart(behaviorTree, taskRuntimeData, stackRuntimeData, task)
+	p.sendMessage(nil, taskRuntimeData.StartTime, "pre_on_start", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //预开始
 }
 
 func (p *KafkaRuntimeEventHandle) PostOnUpdate(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, nowtimestampInMilli int64, status iface.TaskStatus) {
@@ -264,6 +265,7 @@ func (p *KafkaRuntimeEventHandle) PostOnUpdate(behaviorTree iface.IBehaviorTree,
 
 func (p *KafkaRuntimeEventHandle) PostOnEnd(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, nowtimestampInMilli int64) {
 	p.handle.PostOnEnd(behaviorTree, taskRuntimeData, stackRuntimeData, task, nowtimestampInMilli)
+	p.sendMessage(nil, nowtimestampInMilli, "post_on_end", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //结束
 }
 
 func (p *KafkaRuntimeEventHandle) ActionPostOnStart(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, datas [][]byte) {
