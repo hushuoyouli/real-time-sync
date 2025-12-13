@@ -241,6 +241,7 @@ func (p *KafkaRuntimeEventHandle) PostInitialize(behaviorTree iface.IBehaviorTre
 
 func (p *KafkaRuntimeEventHandle) PostOnComplete(behaviorTree iface.IBehaviorTree, nowtimestampInMilli int64) {
 	p.handle.PostOnComplete(behaviorTree, nowtimestampInMilli)
+	p.sendMessage(nil, nowtimestampInMilli, "post_complete", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //树完成
 }
 
 func (p *KafkaRuntimeEventHandle) NewStack(behaviorTree iface.IBehaviorTree, data *iface.StackRuntimeData) {
