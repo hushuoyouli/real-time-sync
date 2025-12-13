@@ -62,6 +62,7 @@ func (pt *KafkaRuntimeEventHandle) waitForTopicReady(timeout time.Duration) bool
 	deadline := time.Now().Add(timeout)
 	checkInterval := 200 * time.Millisecond // 每 200ms 检查一次
 
+	pt.log.Tracef("等待topic%s就绪，最多等待%d秒", pt.topicName, timeout.Seconds())
 	for time.Now().Before(deadline) {
 		partitions, err := pt.conn.ReadPartitions()
 		if err == nil {
@@ -69,6 +70,7 @@ func (pt *KafkaRuntimeEventHandle) waitForTopicReady(timeout time.Duration) bool
 				if p.Topic == pt.topicName {
 					// Topic 存在，再等待一小段时间确保元数据完全同步
 					time.Sleep(300 * time.Millisecond)
+					pt.log.Tracef("topic%s就绪", pt.topicName)
 					return true
 				}
 			}
