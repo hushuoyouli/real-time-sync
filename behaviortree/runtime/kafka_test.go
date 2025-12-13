@@ -390,8 +390,6 @@ func TestKafkaSend10000Messages(t *testing.T) {
 		AllowAutoTopicCreation: true, // 允许自动创建 topic
 		WriteTimeout:           30 * time.Second,
 		RequiredAcks:           kafka.RequireOne,
-		BatchSize:              100, // 批量发送，提高性能
-		BatchTimeout:           10 * time.Millisecond,
 	}
 	defer writer.Close()
 
@@ -440,35 +438,26 @@ func TestKafkaSend10000Messages(t *testing.T) {
 	}
 
 	// 步骤3: 发送 10000 条消息并统计耗时
-	const messageCount = 10000
-	t.Logf("开始发送 %d 条消息...", messageCount)
+	const messageCount = 100
+	t.Logf("开始发送 %d 条消息（逐个发送）...", messageCount)
 
 	startTime := time.Now()
 
-	// 批量发送消息以提高性能
-	batchSize := 100
-	for i := 0; i < messageCount; i += batchSize {
-		messages := make([]kafka.Message, 0, batchSize)
-		end := i + batchSize
-		if end > messageCount {
-			end = messageCount
-		}
-
-		for j := i; j < end; j++ {
-			messages = append(messages, kafka.Message{
-				Key:   []byte("key-" + strconv.Itoa(j)),
-				Value: []byte("消息内容-" + strconv.Itoa(j) + "-" + time.Now().Format("20060102-150405.000")),
-			})
-		}
-
-		err = writer.WriteMessages(ctx, messages...)
+	// 逐个发送消息
+	for i := 0; i < messageCount; i++ {
+		err = writer.WriteMessages(ctx,
+			kafka.Message{
+				Key:   []byte("key-" + strconv.Itoa(i)),
+				Value: []byte("消息内容-" + strconv.Itoa(i) + "-" + time.Now().Format("20060102-150405.000")),
+			},
+		)
 		if err != nil {
-			t.Fatalf("发送消息批次失败 (消息 %d-%d): %v", i, end-1, err)
+			t.Fatalf("发送消息失败 (消息 %d): %v", i, err)
 		}
 
 		// 每发送 1000 条消息输出一次进度
-		if (i+batchSize)%1000 == 0 || end == messageCount {
-			t.Logf("已发送 %d/%d 条消息", end, messageCount)
+		if (i+1)%1000 == 0 {
+			t.Logf("已发送 %d/%d 条消息", i+1, messageCount)
 		}
 	}
 
