@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"context"
 	"time"
 
 	"github.com/hushuoyouli/real-time-sync/behaviortree/iface"
@@ -18,6 +19,14 @@ type KafkaRuntimeEventHandle struct {
 	conn      *kafka.Conn
 	writer    *kafka.Writer
 	log       rlog.ILogger
+}
+
+// 触发自动创建 topic的消息
+func newInitializeTopicMsg() kafka.Message {
+	return kafka.Message{
+		Key:   []byte("initialize_topic"),
+		Value: []byte("触发自动创建 topic"),
+	}
 }
 
 // topicName,可以是场景的名字，或者是一场战斗的名字，系统自动加上时间
@@ -41,15 +50,40 @@ func NewKafkaRuntimeEventHandle(handle iface.IRuntimeEventHandle, topicName stri
 		RequiredAcks:           kafka.RequireAll,
 	}
 
-	//defer conn.Close()
-	return &KafkaRuntimeEventHandle{
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	log.Tracef("正在向 Topic %s 发送消息...", topicName)
+	log.Tracef("Writer 配置: AllowAutoTopicCreation=%v, Topic=%s", writer.AllowAutoTopicCreation, writer.Topic)
+
+	p := &KafkaRuntimeEventHandle{
 		handle:    handle,
 		topicName: topicName,
 		broker:    broker,
 		conn:      conn,
 		writer:    writer,
 		log:       log,
-	}, nil
+	}
+
+	// 策略：先尝试发送消息（这会触发 topic 自动创建）
+	err = writer.WriteMessages(ctx, newInitializeTopicMsg())
+	if err != nil {
+		if kafkaErr, ok := err.(kafka.Error); ok && kafkaErr == kafka.UnknownTopicOrPartition {
+			log.Tracef("检测到 Topic 不存在错误，等待元数据同步...")
+			if p.waitForTopicReady(15 * time.Second) {
+				log.Tracef("Topic 元数据已同步，重试发送消息...")
+			} else {
+				log.Errorf("等待topic就绪超时")
+				return nil, err
+			}
+		} else {
+			log.Errorf("发送消息失败: %v", err)
+			return nil, err
+		}
+	}
+
+	//defer conn.Close()
+	return p, nil
 }
 
 func (p *KafkaRuntimeEventHandle) Close() {
