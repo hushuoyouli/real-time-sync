@@ -246,10 +246,12 @@ func (p *KafkaRuntimeEventHandle) PostOnComplete(behaviorTree iface.IBehaviorTre
 
 func (p *KafkaRuntimeEventHandle) NewStack(behaviorTree iface.IBehaviorTree, data *iface.StackRuntimeData) {
 	p.handle.NewStack(behaviorTree, data)
+	p.sendMessage([]byte(strconv.FormatInt(int64(data.StackID), 10)), behaviorTree.Clock().TimesampInMill(), "new_stack", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //新栈
 }
 
 func (p *KafkaRuntimeEventHandle) RemoveStack(behaviorTree iface.IBehaviorTree, data *iface.StackRuntimeData, nowtimestampInMilli int64) {
 	p.handle.RemoveStack(behaviorTree, data, nowtimestampInMilli)
+	p.sendMessage([]byte(strconv.FormatInt(int64(data.StackID), 10)), nowtimestampInMilli, "remove_stack", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //删除栈
 }
 
 func (p *KafkaRuntimeEventHandle) PreOnStart(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask) {
