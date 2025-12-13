@@ -270,28 +270,35 @@ func (p *KafkaRuntimeEventHandle) PostOnEnd(behaviorTree iface.IBehaviorTree, ta
 
 func (p *KafkaRuntimeEventHandle) ActionPostOnStart(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, datas [][]byte) {
 	p.handle.ActionPostOnStart(behaviorTree, taskRuntimeData, stackRuntimeData, task, datas)
+	p.sendMessage(nil, taskRuntimeData.StartTime, "action_post_on_start", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //动作开始
 }
 
 func (p *KafkaRuntimeEventHandle) ActionPostOnUpdate(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, nowtimestampInMilli int64, status iface.TaskStatus, datas [][]byte) {
 	p.handle.ActionPostOnUpdate(behaviorTree, taskRuntimeData, stackRuntimeData, task, nowtimestampInMilli, status, datas)
+	p.sendMessage(nil, nowtimestampInMilli, "action_post_on_update", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //动作更新
 }
 
 func (p *KafkaRuntimeEventHandle) ActionPostOnEnd(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, nowtimestampInMilli int64, datas [][]byte) {
 	p.handle.ActionPostOnEnd(behaviorTree, taskRuntimeData, stackRuntimeData, task, nowtimestampInMilli, datas)
+	p.sendMessage(nil, nowtimestampInMilli, "action_post_on_end", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //动作结束
 }
 
 func (p *KafkaRuntimeEventHandle) ParallelPreOnStart(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask) {
 	p.handle.ParallelPreOnStart(behaviorTree, taskRuntimeData, stackRuntimeData, task)
+	p.sendMessage(nil, taskRuntimeData.StartTime, "parallel_pre_on_start", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //并发任务开始
 }
 
 func (p *KafkaRuntimeEventHandle) ParallelPostOnEnd(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, nowtimestampInMilli int64) {
 	p.handle.ParallelPostOnEnd(behaviorTree, taskRuntimeData, stackRuntimeData, task, nowtimestampInMilli)
+	p.sendMessage(nil, nowtimestampInMilli, "parallel_post_on_end", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //并发任务结束
 }
 
 func (p *KafkaRuntimeEventHandle) ParallelAddChildStack(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, childStackRuntimeData *iface.StackRuntimeData) {
 	p.handle.ParallelAddChildStack(behaviorTree, taskRuntimeData, stackRuntimeData, task, childStackRuntimeData)
+	p.sendMessage([]byte(strconv.FormatInt(int64(childStackRuntimeData.StackID), 10)), behaviorTree.Clock().TimesampInMill(), "parallel_add_child_stack", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //并发任务增加子栈
 }
 
 func (p *KafkaRuntimeEventHandle) ParallelRemoveChildStack(behaviorTree iface.IBehaviorTree, taskRuntimeData *iface.TaskRuntimeData, stackRuntimeData *iface.StackRuntimeData, task iface.ITask, childStackRuntimeData *iface.StackRuntimeData, nowtimestampInMilli int64) {
 	p.handle.ParallelRemoveChildStack(behaviorTree, taskRuntimeData, stackRuntimeData, task, childStackRuntimeData, nowtimestampInMilli)
+	p.sendMessage([]byte(strconv.FormatInt(int64(childStackRuntimeData.StackID), 10)), nowtimestampInMilli, "parallel_remove_child_stack", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //并发任务删除子栈
 }
