@@ -384,6 +384,7 @@ func TestKafkaSend10000Messages(t *testing.T) {
 
 	// 创建生产者，允许自动创建 topic
 	// 优化配置以减少延迟，同时保持 RequireOne 确认
+	// 关键优化：设置 BatchTimeout=0 和 BatchSize=1，立即发送，不等待批量
 	writer := &kafka.Writer{
 		Addr:                   kafka.TCP(broker),
 		Topic:                  topicName,
@@ -392,8 +393,15 @@ func TestKafkaSend10000Messages(t *testing.T) {
 		WriteTimeout:           5 * time.Second,  // 减少超时时间，快速失败
 		RequiredAcks:           kafka.RequireOne, // 至少需要一个 broker 确认
 		Async:                  false,            // 同步发送，确保每条消息都确认
+		BatchSize:              1,                // 批量大小为1，当累积1条消息时立即发送
+		BatchTimeout:           0,                // 不等待批量超时，立即发送（这是关键！）
+		BatchBytes:             0,                // 不限制批量字节数
 		// 不启用压缩，减少 CPU 开销和延迟
-		// 注意：kafka-go 默认会复用连接，但可能需要优化连接池设置
+		// 注意：
+		// 1. kafka-go 默认 BatchTimeout 可能是 1 秒，这就是为什么每条消息都正好 1 秒的原因
+		// 2. BatchSize=1 表示当 Writer 内部累积的消息达到 1 条时触发发送
+		// 3. 但是，如果一次 WriteMessages() 调用传入多个消息，这些消息会作为一个批次一起发送（更高效）
+		//    例如：WriteMessages(ctx, msg1, msg2, msg3) 会一次性发送 3 条消息，而不是分 3 次发送
 	}
 	defer writer.Close()
 
@@ -442,9 +450,11 @@ func TestKafkaSend10000Messages(t *testing.T) {
 	}
 
 	// 步骤3: 发送 10000 条消息并统计耗时
-	const messageCount = 10
-	t.Logf("开始发送 %d 条消息（逐个发送）...", messageCount)
-	t.Logf("当前配置: RequiredAcks=%v, WriteTimeout=%v, Async=%v", writer.RequiredAcks, writer.WriteTimeout, writer.Async)
+	const messageCount = 10000
+	const batchSize = 5000 // 每次批量发送的消息数量
+	t.Logf("开始发送 %d 条消息（批量发送，每次 %d 条）...", messageCount, batchSize)
+	t.Logf("当前配置: RequiredAcks=%v, WriteTimeout=%v, Async=%v, BatchSize=%d, BatchTimeout=%v",
+		writer.RequiredAcks, writer.WriteTimeout, writer.Async, writer.BatchSize, writer.BatchTimeout)
 
 	// 测试网络延迟
 	networkTestStart := time.Now()
@@ -460,42 +470,52 @@ func TestKafkaSend10000Messages(t *testing.T) {
 
 	startTime := time.Now()
 
-	// 逐个发送消息，并记录每次发送的耗时
-	var messageTimes []time.Duration
-	for i := 0; i < messageCount; i++ {
-		msgStartTime := time.Now()
+	// 批量发送消息，并记录每个批次的耗时
+	var batchTimes []time.Duration
+	totalSent := 0
+
+	for i := 0; i < messageCount; i += batchSize {
+		batchStartTime := time.Now()
+
+		// 构建当前批次的消息
+		end := i + batchSize
+		if end > messageCount {
+			end = messageCount
+		}
+
+		messages := make([]kafka.Message, 0, end-i)
+		for j := i; j < end; j++ {
+			messages = append(messages, kafka.Message{
+				Key:   []byte("key-" + strconv.Itoa(j)),
+				Value: []byte("消息内容-" + strconv.Itoa(j) + "-" + time.Now().Format("20060102-150405.000")),
+			})
+		}
 
 		// 使用带超时的 context，避免长时间等待
-		msgCtx, msgCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		msgCtx, msgCancel := context.WithTimeout(context.Background(), 30*time.Second)
 
-		err = writer.WriteMessages(msgCtx,
-			kafka.Message{
-				Key:   []byte("key-" + strconv.Itoa(i)),
-				Value: []byte("消息内容-" + strconv.Itoa(i) + "-" + time.Now().Format("20060102-150405.000")),
-			},
-		)
+		// 批量发送当前批次的所有消息
+		err = writer.WriteMessages(msgCtx, messages...)
 
 		msgCancel() // 立即取消 context
-		msgElapsed := time.Since(msgStartTime)
-		messageTimes = append(messageTimes, msgElapsed)
+		batchElapsed := time.Since(batchStartTime)
+		batchTimes = append(batchTimes, batchElapsed)
 
 		if err != nil {
-			t.Fatalf("发送消息失败 (消息 %d): %v", i, err)
+			t.Fatalf("发送消息批次失败 (消息 %d-%d): %v", i, end-1, err)
 		}
 
-		// 对于少量消息，每次都输出耗时
-		if messageCount <= 10 {
-			t.Logf("消息 %d 发送耗时: %v (%.2f ms)", i+1, msgElapsed, float64(msgElapsed.Nanoseconds())/1e6)
-		}
+		totalSent += len(messages)
 
-		// 如果单条消息超过500ms，输出警告
-		if msgElapsed > 500*time.Millisecond {
-			t.Logf("⚠️  消息 %d 耗时异常: %v，可能存在问题", i+1, msgElapsed)
-		}
+		// 输出每个批次的耗时和性能
+		avgTimePerMsg := batchElapsed / time.Duration(len(messages))
+		throughput := float64(len(messages)) / batchElapsed.Seconds()
+		t.Logf("批次 %d: 发送 %d 条消息，耗时 %v (平均每条: %v, 吞吐量: %.2f 消息/秒)",
+			len(batchTimes), len(messages), batchElapsed, avgTimePerMsg, throughput)
 
-		// 每发送 1000 条消息输出一次进度
-		if (i+1)%1000 == 0 {
-			t.Logf("已发送 %d/%d 条消息", i+1, messageCount)
+		// 如果批次耗时超过1秒，输出警告
+		if batchElapsed > 1*time.Second {
+			t.Logf("⚠️  批次 %d 耗时异常: %v，可能存在问题", len(batchTimes), batchElapsed)
 		}
 	}
 
@@ -503,41 +523,55 @@ func TestKafkaSend10000Messages(t *testing.T) {
 
 	// 步骤4: 输出统计信息
 	t.Logf("\n=== 性能统计 ===")
-	t.Logf("✓ 成功发送 %d 条消息", messageCount)
+	t.Logf("✓ 成功发送 %d 条消息（共 %d 个批次，每批次 %d 条）", totalSent, len(batchTimes), batchSize)
 	t.Logf("✓ 总耗时: %v", elapsed)
-	t.Logf("✓ 平均每条消息耗时: %v", elapsed/time.Duration(messageCount))
-	t.Logf("✓ 吞吐量: %.2f 消息/秒", float64(messageCount)/elapsed.Seconds())
-	t.Logf("✓ 吞吐量: %.2f 消息/毫秒", float64(messageCount)/float64(elapsed.Milliseconds()))
+	t.Logf("✓ 平均每条消息耗时: %v", elapsed/time.Duration(totalSent))
+	t.Logf("✓ 平均每批次耗时: %v", elapsed/time.Duration(len(batchTimes)))
+	t.Logf("✓ 总吞吐量: %.2f 消息/秒", float64(totalSent)/elapsed.Seconds())
+	t.Logf("✓ 总吞吐量: %.2f 消息/毫秒", float64(totalSent)/float64(elapsed.Milliseconds()))
 
-	// 详细分析每条消息的耗时
-	if len(messageTimes) > 0 {
+	// 详细分析每个批次的耗时
+	if len(batchTimes) > 0 {
 		var minTime, maxTime, totalTime time.Duration
-		minTime = messageTimes[0]
-		maxTime = messageTimes[0]
-		for _, t := range messageTimes {
-			if t < minTime {
-				minTime = t
+		minTime = batchTimes[0]
+		maxTime = batchTimes[0]
+		for _, bt := range batchTimes {
+			if bt < minTime {
+				minTime = bt
 			}
-			if t > maxTime {
-				maxTime = t
+			if bt > maxTime {
+				maxTime = bt
 			}
-			totalTime += t
+			totalTime += bt
 		}
 		t.Logf("\n=== 详细性能分析 ===")
-		t.Logf("最短耗时: %v", minTime)
-		t.Logf("最长耗时: %v", maxTime)
-		t.Logf("平均耗时: %v", totalTime/time.Duration(len(messageTimes)))
+		t.Logf("最短批次耗时: %v (平均每条: %v)", minTime, minTime/time.Duration(batchSize))
+		t.Logf("最长批次耗时: %v (平均每条: %v)", maxTime, maxTime/time.Duration(batchSize))
+		t.Logf("平均批次耗时: %v (平均每条: %v)", totalTime/time.Duration(len(batchTimes)), (totalTime/time.Duration(len(batchTimes)))/time.Duration(batchSize))
 
 		// 分析可能的原因
 		t.Logf("\n=== 性能分析建议 ===")
-		if maxTime > 500*time.Millisecond {
-			t.Logf("⚠️⚠️  单条消息耗时异常（>500ms），严重性能问题！")
+
+		// 计算平均每条消息的耗时
+		avgPerMsg := maxTime / time.Duration(batchSize)
+
+		// 检查是否是 BatchTimeout 导致的延迟（正好1秒左右）
+		if avgPerMsg > 900*time.Millisecond && avgPerMsg < 1100*time.Millisecond {
+			t.Logf("🔍 检测到平均每条消息延迟正好在 1 秒左右（%v），这很可能是 BatchTimeout 导致的！", avgPerMsg)
+			t.Logf("   kafka-go Writer 默认 BatchTimeout 可能是 1 秒，即使只发送一条消息也会等待")
+			t.Logf("   ✓ 已设置 BatchTimeout=0 和 BatchSize=1，应该能解决此问题")
+			t.Logf("   如果仍然很慢，请检查其他配置")
+		}
+
+		if avgPerMsg > 500*time.Millisecond {
+			t.Logf("⚠️⚠️  平均每条消息耗时异常（>500ms），严重性能问题！")
 			t.Logf("   可能原因：")
-			t.Logf("   1. Kafka broker 配置问题（检查 server.properties）")
-			t.Logf("   2. 网络延迟或丢包（检查: ping localhost, telnet localhost 9092）")
-			t.Logf("   3. Kafka broker 负载过高或资源不足")
-			t.Logf("   4. 防火墙或网络配置问题")
-			t.Logf("   5. Docker 容器网络配置问题（如果使用 Docker）")
+			t.Logf("   1. BatchTimeout 配置问题（已设置 BatchTimeout=0，BatchSize=1）")
+			t.Logf("   2. Kafka broker 配置问题（检查 server.properties）")
+			t.Logf("   3. 网络延迟或丢包（检查: ping localhost, telnet localhost 9092）")
+			t.Logf("   4. Kafka broker 负载过高或资源不足")
+			t.Logf("   5. 防火墙或网络配置问题")
+			t.Logf("   6. Docker 容器网络配置问题（如果使用 Docker）")
 			t.Logf("\n   诊断步骤：")
 			t.Logf("   1. 检查 Kafka broker 日志: docker logs kafka")
 			t.Logf("   2. 测试网络延迟: ping localhost")
@@ -547,8 +581,8 @@ func TestKafkaSend10000Messages(t *testing.T) {
 			t.Logf("      - socket.send.buffer.bytes")
 			t.Logf("      - socket.receive.buffer.bytes")
 			t.Logf("   5. 检查系统资源: CPU、内存、磁盘 I/O")
-		} else if maxTime > 100*time.Millisecond {
-			t.Logf("⚠️  单条消息耗时较长（>100ms），可能原因：")
+		} else if avgPerMsg > 100*time.Millisecond {
+			t.Logf("⚠️  平均每条消息耗时较长（>100ms），可能原因：")
 			t.Logf("   1. RequiredAcks=%v 需要等待 broker 确认（网络往返时间）", writer.RequiredAcks)
 			t.Logf("   2. 网络延迟较高（本地应该 <10ms）")
 			t.Logf("   3. Kafka broker 处理较慢")
@@ -557,12 +591,14 @@ func TestKafkaSend10000Messages(t *testing.T) {
 			t.Logf("   - 检查 Kafka broker 状态和性能")
 			t.Logf("   - 如果使用 Docker，检查容器网络配置")
 			t.Logf("   - 检查 Kafka broker 日志是否有错误或警告")
-		} else if maxTime > 10*time.Millisecond {
-			t.Logf("ℹ️  单条消息耗时中等（10-100ms）")
+		} else if avgPerMsg > 10*time.Millisecond {
+			t.Logf("ℹ️  平均每条消息耗时中等（10-100ms）")
 			t.Logf("   当前 RequiredAcks=%v 需要等待 broker 确认", writer.RequiredAcks)
+			t.Logf("   批量发送 %d 条消息，平均每条 %v，性能良好", batchSize, avgPerMsg)
 			t.Logf("   对于本地 Kafka，这个时间可能偏长，建议检查网络配置")
 		} else {
-			t.Logf("✓ 单条消息耗时较短（<10ms），性能良好")
+			t.Logf("✓ 平均每条消息耗时较短（<10ms），性能良好")
+			t.Logf("   批量发送 %d 条消息，平均每条 %v，吞吐量优秀", batchSize, avgPerMsg)
 		}
 	}
 }
