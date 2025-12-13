@@ -72,9 +72,9 @@ func NewKafkaRuntimeEventHandle(handle iface.IRuntimeEventHandle, topicName stri
 		if kafkaErr, ok := err.(kafka.Error); ok && kafkaErr == kafka.UnknownTopicOrPartition {
 			log.Tracef("检测到 Topic 不存在错误，等待元数据同步...")
 			if p.waitForTopicReady(15 * time.Second) {
-				log.Tracef("Topic 元数据已同步，重试发送消息...")
+				//log.Tracef("Topic 元数据已同步，重试发送消息...")
 			} else {
-				log.Errorf("等待topic就绪超时:%s", err.Error())
+				log.Errorf("等待topic就绪超时...")
 				writer.Close()
 				conn.Close()
 				return nil, err

@@ -318,6 +318,7 @@ verifyTopic:
 		t.Errorf("✗✗✗ 失败！Topic %s 未找到，自动创建可能未生效", topicName)
 		t.Logf("提示: 请检查 Kafka 配置，确保 KAFKA_AUTO_CREATE_TOPICS_ENABLE=true")
 	}
+
 }
 
 // 辅助函数：等待 topic 创建并元数据同步完成
@@ -361,4 +362,123 @@ func getKeys(m map[string]bool) []string {
 		keys = append(keys, k)
 	}
 	return keys
+}
+
+// TestKafkaSend10000Messages 测试自动创建 topic 并发送 10000 条消息的性能
+func TestKafkaSend10000Messages(t *testing.T) {
+	// Kafka broker 地址
+	broker := "localhost:9092"
+
+	// 创建 Kafka 连接
+	conn, err := kafka.Dial("tcp", broker)
+	if err != nil {
+		t.Fatalf("连接 Kafka 失败: %v", err)
+	}
+	defer conn.Close()
+
+	t.Logf("成功连接到 Kafka")
+
+	// 生成一个随机的 topic 名称（使用时间戳确保唯一性）
+	topicName := "test-benchmark-" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	t.Logf("测试 Topic 名称: %s", topicName)
+
+	// 创建生产者，允许自动创建 topic
+	writer := &kafka.Writer{
+		Addr:                   kafka.TCP(broker),
+		Topic:                  topicName,
+		Balancer:               &kafka.LeastBytes{},
+		AllowAutoTopicCreation: true, // 允许自动创建 topic
+		WriteTimeout:           30 * time.Second,
+		RequiredAcks:           kafka.RequireOne,
+		BatchSize:              100, // 批量发送，提高性能
+		BatchTimeout:           10 * time.Millisecond,
+	}
+	defer writer.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	// 步骤1: 尝试发送一条消息来触发 topic 自动创建
+	t.Logf("正在触发 Topic %s 的自动创建...", topicName)
+	err = writer.WriteMessages(ctx,
+		kafka.Message{
+			Key:   []byte("init-key"),
+			Value: []byte("初始化消息，用于触发自动创建 topic"),
+		},
+	)
+
+	// 如果第一次发送失败，且是 topic 不存在的错误，等待元数据同步
+	if err != nil {
+		if kafkaErr, ok := err.(kafka.Error); ok && kafkaErr == kafka.UnknownTopicOrPartition {
+			t.Logf("检测到 Topic 不存在错误，等待元数据同步...")
+			if waitForTopicReady(conn, topicName, 10*time.Second, t) {
+				// Topic 已就绪，重试发送消息
+				t.Logf("Topic 元数据已同步，重试发送初始化消息...")
+				err = writer.WriteMessages(ctx,
+					kafka.Message{
+						Key:   []byte("init-key"),
+						Value: []byte("初始化消息，用于触发自动创建 topic"),
+					},
+				)
+				if err != nil {
+					t.Fatalf("等待元数据同步后，发送初始化消息仍然失败: %v", err)
+				}
+			} else {
+				t.Fatalf("等待 Topic 创建超时")
+			}
+		} else {
+			t.Fatalf("发送初始化消息失败: %v", err)
+		}
+	} else {
+		t.Logf("✓ 初始化消息发送成功，Topic 已创建")
+	}
+
+	// 步骤2: 确认 topic 已创建并等待完全就绪
+	t.Logf("确认 Topic 创建状态...")
+	if !waitForTopicReady(conn, topicName, 5*time.Second, t) {
+		t.Fatalf("Topic %s 创建失败或超时", topicName)
+	}
+
+	// 步骤3: 发送 10000 条消息并统计耗时
+	const messageCount = 10000
+	t.Logf("开始发送 %d 条消息...", messageCount)
+
+	startTime := time.Now()
+
+	// 批量发送消息以提高性能
+	batchSize := 100
+	for i := 0; i < messageCount; i += batchSize {
+		messages := make([]kafka.Message, 0, batchSize)
+		end := i + batchSize
+		if end > messageCount {
+			end = messageCount
+		}
+
+		for j := i; j < end; j++ {
+			messages = append(messages, kafka.Message{
+				Key:   []byte("key-" + strconv.Itoa(j)),
+				Value: []byte("消息内容-" + strconv.Itoa(j) + "-" + time.Now().Format("20060102-150405.000")),
+			})
+		}
+
+		err = writer.WriteMessages(ctx, messages...)
+		if err != nil {
+			t.Fatalf("发送消息批次失败 (消息 %d-%d): %v", i, end-1, err)
+		}
+
+		// 每发送 1000 条消息输出一次进度
+		if (i+batchSize)%1000 == 0 || end == messageCount {
+			t.Logf("已发送 %d/%d 条消息", end, messageCount)
+		}
+	}
+
+	elapsed := time.Since(startTime)
+
+	// 步骤4: 输出统计信息
+	t.Logf("\n=== 性能统计 ===")
+	t.Logf("✓ 成功发送 %d 条消息", messageCount)
+	t.Logf("✓ 总耗时: %v", elapsed)
+	t.Logf("✓ 平均每条消息耗时: %v", elapsed/time.Duration(messageCount))
+	t.Logf("✓ 吞吐量: %.2f 消息/秒", float64(messageCount)/elapsed.Seconds())
+	t.Logf("✓ 吞吐量: %.2f 消息/毫秒", float64(messageCount)/float64(elapsed.Milliseconds()))
 }
