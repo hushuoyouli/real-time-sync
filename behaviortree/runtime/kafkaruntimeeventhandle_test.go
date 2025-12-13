@@ -553,7 +553,7 @@ func TestKafkaRuntimeEventHandle_SendMessage(t *testing.T) {
 	}
 
 	// 调用 sendMessage（由于是私有方法，在同一个包中可以访问）
-	handle.sendMessage(testMsg)
+	handle.sendMessage(testMsg.Value, time.Now().UnixMilli(), "test")
 
 	// 从通道中读取消息并验证
 	select {
@@ -607,11 +607,11 @@ func TestKafkaRuntimeEventHandle_SendMessage_Multiple(t *testing.T) {
 	// 发送多条消息
 	messageCount := 9999
 	for i := 0; i < messageCount; i++ {
-		testMsg := kafka.Message{
+		/* 		testMsg := kafka.Message{
 			Key:   []byte("test-key"),
 			Value: []byte("test message " + string(rune(i+'0'))),
-		}
-		handle.sendMessage(testMsg)
+		} */
+		handle.sendMessage([]byte("test message "+string(rune(i+'0'))), time.Now().UnixMilli(), "test")
 	}
 
 }

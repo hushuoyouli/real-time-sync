@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"strconv"
 	"sync"
 	"time"
 
@@ -187,9 +188,25 @@ func (p *KafkaRuntimeEventHandle) Close() {
 	p.conn.Close()
 }
 
-func (p *KafkaRuntimeEventHandle) sendMessage(msg kafka.Message) {
-	p.kafkaMessageChannel <- msg
+func (p *KafkaRuntimeEventHandle) sendMessage(content []byte, nowtimestampInMilli int64, eventType string) {
+	/* 	p.sendMessage(kafka.Message{
+		Key:   []byte(p.topicName),
+		Value: content,
+	}) */
+
+	p.kafkaMessageChannel <- kafka.Message{
+		Key:   []byte(p.topicName),
+		Value: content,
+		Headers: []kafka.Header{
+			{Key: "nowtimestampInMilli", Value: []byte(strconv.FormatInt(nowtimestampInMilli, 10))}, //事件发生的时间
+			{Key: "type", Value: []byte(eventType)},                                                 //事件类型
+		},
+	}
 }
+
+/* func (p *KafkaRuntimeEventHandle) sendMessage(msg kafka.Message) {
+	p.kafkaMessageChannel <- msg
+} */
 
 // 等待topic就绪
 func (pt *KafkaRuntimeEventHandle) waitForTopicReady(timeout time.Duration) bool {
