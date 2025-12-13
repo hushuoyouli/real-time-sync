@@ -354,11 +354,6 @@ func waitForTopicReady(conn *kafka.Conn, topicName string, timeout time.Duration
 	return false
 }
 
-// 辅助函数：格式化 broker 地址
-func formatBrokerAddress(broker kafka.Broker) string {
-	return broker.Host + ":" + strconv.Itoa(broker.Port)
-}
-
 // 辅助函数：获取 map 的键列表
 func getKeys(m map[string]bool) []string {
 	keys := make([]string, 0, len(m))
