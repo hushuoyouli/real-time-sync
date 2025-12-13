@@ -33,7 +33,7 @@ func newInitializeTopicMsg() kafka.Message {
 // broker,可以是kafka的地址等等
 func NewKafkaRuntimeEventHandle(handle iface.IRuntimeEventHandle, topicName string, broker string, log rlog.ILogger) (*KafkaRuntimeEventHandle, error) {
 	// 格式化当前时间，返回形如"20060102-150405"的字符串
-	nowTimeStr := time.Now().Format("20060102-150405")
+	nowTimeStr := time.Now().Format("20060102-150405.000")
 	topicName = topicName + "-" + nowTimeStr
 
 	conn, err := kafka.Dial("tcp", broker)
@@ -66,6 +66,7 @@ func NewKafkaRuntimeEventHandle(handle iface.IRuntimeEventHandle, topicName stri
 	}
 
 	// 策略：先尝试发送消息（这会触发 topic 自动创建）
+	startCreate := time.Now()
 	err = writer.WriteMessages(ctx, newInitializeTopicMsg())
 	if err != nil {
 		if kafkaErr, ok := err.(kafka.Error); ok && kafkaErr == kafka.UnknownTopicOrPartition {
@@ -85,6 +86,8 @@ func NewKafkaRuntimeEventHandle(handle iface.IRuntimeEventHandle, topicName stri
 			return nil, err
 		}
 	}
+	createDuration := time.Since(startCreate)
+	log.Tracef("KafkaRuntimeEventHandle 创建 topic 的耗时: %v", createDuration)
 
 	//defer conn.Close()
 	return p, nil
