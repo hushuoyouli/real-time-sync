@@ -390,13 +390,13 @@ func TestKafkaSend10000Messages(t *testing.T) {
 		Addr:                   kafka.TCP(broker),
 		Topic:                  topicName,
 		Balancer:               &kafka.LeastBytes{},
-		AllowAutoTopicCreation: true,             // 允许自动创建 topic
-		WriteTimeout:           5 * time.Second,  // 减少超时时间，快速失败
-		RequiredAcks:           kafka.RequireOne, // 至少需要一个 broker 确认
-		Async:                  false,            // 同步发送，确保每条消息都确认
-		BatchSize:              1,                // 批量大小为1，当累积1条消息时立即发送
-		BatchTimeout:           0,                // 不等待批量超时，立即发送（这是关键！）
-		BatchBytes:             0,                // 不限制批量字节数
+		AllowAutoTopicCreation: true,              // 允许自动创建 topic
+		WriteTimeout:           5 * time.Second,   // 减少超时时间，快速失败
+		RequiredAcks:           kafka.RequireNone, // 至少需要一个 broker 确认
+		Async:                  false,             // 同步发送，确保每条消息都确认
+		BatchSize:              1,                 // 批量大小为1，当累积1条消息时立即发送
+		BatchTimeout:           0,                 // 不等待批量超时，立即发送（这是关键！）
+		BatchBytes:             0,                 // 不限制批量字节数
 		// 不启用压缩，减少 CPU 开销和延迟
 		// 注意：
 		// 1. kafka-go 默认 BatchTimeout 可能是 1 秒，这就是为什么每条消息都正好 1 秒的原因
@@ -452,7 +452,7 @@ func TestKafkaSend10000Messages(t *testing.T) {
 
 	// 步骤3: 发送 10000 条消息并统计耗时
 	const messageCount = 10000
-	const batchSize = 5000 // 每次批量发送的消息数量
+	const batchSize = 1 // 每次批量发送的消息数量
 	t.Logf("开始发送 %d 条消息（批量发送，每次 %d 条）...", messageCount, batchSize)
 	t.Logf("当前配置: RequiredAcks=%v, WriteTimeout=%v, Async=%v, BatchSize=%d, BatchTimeout=%v",
 		writer.RequiredAcks, writer.WriteTimeout, writer.Async, writer.BatchSize, writer.BatchTimeout)
