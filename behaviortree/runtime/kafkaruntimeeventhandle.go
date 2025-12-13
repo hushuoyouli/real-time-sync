@@ -76,7 +76,7 @@ func NewKafkaRuntimeEventHandle(handle iface.IRuntimeEventHandle, topicName stri
 		messageWriteWaitGroup: sync.WaitGroup{},
 		messageWriteContext:   messageWriteContext,
 		messageWriteCancel:    messageWriteCancel,
-		kafkaMessageChannel:   make(chan kafka.Message, 1000),
+		kafkaMessageChannel:   make(chan kafka.Message, 3000),
 	}
 
 	// 策略：先尝试发送消息（这会触发 topic 自动创建）
@@ -107,9 +107,11 @@ func NewKafkaRuntimeEventHandle(handle iface.IRuntimeEventHandle, topicName stri
 	go func() {
 		defer p.messageWriteWaitGroup.Done()
 		defer writer.Close()
+		defer close(p.kafkaMessageChannel)
 		stop := false
 		msgCount := 0
-		msgCache := make([]kafka.Message, 0, 1000)
+		msgBatch := 500
+		msgCache := make([]kafka.Message, 0, msgBatch)
 		for {
 			if stop {
 				break
@@ -119,10 +121,13 @@ func NewKafkaRuntimeEventHandle(handle iface.IRuntimeEventHandle, topicName stri
 			case msg := <-p.kafkaMessageChannel:
 				msgCache = append(msgCache, msg)
 				msgCount++
-				if msgCount >= 1000 {
-					err = writer.WriteMessages(p.messageWriteContext, msgCache...)
+				if msgCount >= msgBatch {
+					startTime := time.Now()
+					err = writer.WriteMessages(context.Background(), msgCache...)
 					if err != nil {
 						p.log.Errorf("发送消息失败: %v", err)
+					} else {
+						p.log.Tracef("发送%d条消息成功，耗时%v,吞吐量%.2f条/秒,平均每条消息耗时%v", msgCount, time.Since(startTime), float64(msgCount)/time.Since(startTime).Seconds(), time.Since(startTime)/time.Duration(msgCount))
 					}
 					msgCache = msgCache[:0]
 					msgCount = 0
@@ -146,8 +151,8 @@ func NewKafkaRuntimeEventHandle(handle iface.IRuntimeEventHandle, topicName stri
 			case msg := <-p.kafkaMessageChannel:
 				msgCache = append(msgCache, msg)
 				msgCount++
-				if msgCount >= 1000 {
-					err = writer.WriteMessages(p.messageWriteContext, msgCache...)
+				if msgCount >= msgBatch {
+					err = writer.WriteMessages(context.Background(), msgCache...)
 					if err != nil {
 						p.log.Errorf("发送消息失败: %v", err)
 					}
@@ -160,9 +165,12 @@ func NewKafkaRuntimeEventHandle(handle iface.IRuntimeEventHandle, topicName stri
 		}
 
 		if msgCount > 0 {
-			err = writer.WriteMessages(p.messageWriteContext, msgCache...)
+			startTime := time.Now()
+			err = writer.WriteMessages(context.Background(), msgCache...)
 			if err != nil {
 				p.log.Errorf("发送消息失败: %v", err)
+			} else {
+				p.log.Tracef("发送%d条消息成功，耗时%v,吞吐量%.2f条/秒,平均每条消息耗时%v", msgCount, time.Since(startTime), float64(msgCount)/time.Since(startTime).Seconds(), time.Since(startTime)/time.Duration(msgCount))
 			}
 		}
 	}()

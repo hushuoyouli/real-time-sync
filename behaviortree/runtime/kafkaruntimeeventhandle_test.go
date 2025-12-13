@@ -522,3 +522,96 @@ func TestNewInitializeTopicMsg(t *testing.T) {
 		t.Errorf("消息 Value 应该是 '触发自动创建 topic'，但得到: %s", string(msg.Value))
 	}
 }
+
+// TestKafkaRuntimeEventHandle_SendMessage 测试 sendMessage 方法
+func TestKafkaRuntimeEventHandle_SendMessage(t *testing.T) {
+	broker := "localhost:9092"
+
+	// 检查 Kafka 是否可用
+	conn, err := kafka.Dial("tcp", broker)
+	if err != nil {
+		t.Skipf("跳过测试：无法连接到 Kafka: %v", err)
+	}
+	conn.Close()
+
+	mockHandle := &MockRuntimeEventHandle{}
+	logger := &rlog.SLogger{}
+
+	handle, err := NewKafkaRuntimeEventHandle(mockHandle, "test-send-message", broker, logger)
+	if err != nil {
+		t.Fatalf("创建 KafkaRuntimeEventHandle 失败: %v", err)
+	}
+	defer handle.Close()
+
+	// 创建测试消息
+	testMsg := kafka.Message{
+		Key:   []byte("test-key"),
+		Value: []byte("test message value"),
+		Headers: []kafka.Header{
+			{Key: "header1", Value: []byte("value1")},
+		},
+	}
+
+	// 调用 sendMessage（由于是私有方法，在同一个包中可以访问）
+	handle.sendMessage(testMsg)
+
+	// 从通道中读取消息并验证
+	select {
+	case receivedMsg := <-handle.kafkaMessageChannel:
+		// 验证消息的 Key
+		if string(receivedMsg.Key) != string(testMsg.Key) {
+			t.Errorf("消息 Key 不匹配: 期望 %s, 实际 %s", string(testMsg.Key), string(receivedMsg.Key))
+		}
+
+		// 验证消息的 Value
+		if string(receivedMsg.Value) != string(testMsg.Value) {
+			t.Errorf("消息 Value 不匹配: 期望 %s, 实际 %s", string(testMsg.Value), string(receivedMsg.Value))
+		}
+
+		// 验证消息的 Headers
+		if len(receivedMsg.Headers) != len(testMsg.Headers) {
+			t.Errorf("消息 Headers 数量不匹配: 期望 %d, 实际 %d", len(testMsg.Headers), len(receivedMsg.Headers))
+		} else if len(receivedMsg.Headers) > 0 {
+			if receivedMsg.Headers[0].Key != testMsg.Headers[0].Key {
+				t.Errorf("消息 Header Key 不匹配: 期望 %s, 实际 %s", testMsg.Headers[0].Key, receivedMsg.Headers[0].Key)
+			}
+			if string(receivedMsg.Headers[0].Value) != string(testMsg.Headers[0].Value) {
+				t.Errorf("消息 Header Value 不匹配: 期望 %s, 实际 %s", string(testMsg.Headers[0].Value), string(receivedMsg.Headers[0].Value))
+			}
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("超时：未能从通道中接收到消息")
+	}
+}
+
+// TestKafkaRuntimeEventHandle_SendMessage_Multiple 测试 sendMessage 发送多条消息
+func TestKafkaRuntimeEventHandle_SendMessage_Multiple(t *testing.T) {
+	broker := "localhost:9092"
+
+	// 检查 Kafka 是否可用
+	conn, err := kafka.Dial("tcp", broker)
+	if err != nil {
+		t.Skipf("跳过测试：无法连接到 Kafka: %v", err)
+	}
+	conn.Close()
+
+	mockHandle := &MockRuntimeEventHandle{}
+	logger := &rlog.SLogger{}
+
+	handle, err := NewKafkaRuntimeEventHandle(mockHandle, "test-send-multiple", broker, logger)
+	if err != nil {
+		t.Fatalf("创建 KafkaRuntimeEventHandle 失败: %v", err)
+	}
+	defer handle.Close()
+
+	// 发送多条消息
+	messageCount := 9999
+	for i := 0; i < messageCount; i++ {
+		testMsg := kafka.Message{
+			Key:   []byte("test-key"),
+			Value: []byte("test message " + string(rune(i+'0'))),
+		}
+		handle.sendMessage(testMsg)
+	}
+
+}
