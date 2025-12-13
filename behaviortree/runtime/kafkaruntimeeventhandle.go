@@ -73,10 +73,14 @@ func NewKafkaRuntimeEventHandle(handle iface.IRuntimeEventHandle, topicName stri
 			if p.waitForTopicReady(15 * time.Second) {
 				log.Tracef("Topic 元数据已同步，重试发送消息...")
 			} else {
-				log.Errorf("等待topic就绪超时")
+				log.Errorf("等待topic就绪超时:%s", err.Error())
+				writer.Close()
+				conn.Close()
 				return nil, err
 			}
 		} else {
+			writer.Close()
+			conn.Close()
 			log.Errorf("发送消息失败: %v", err)
 			return nil, err
 		}
@@ -96,7 +100,7 @@ func (pt *KafkaRuntimeEventHandle) waitForTopicReady(timeout time.Duration) bool
 	deadline := time.Now().Add(timeout)
 	checkInterval := 200 * time.Millisecond // 每 200ms 检查一次
 
-	pt.log.Tracef("等待topic%s就绪，最多等待%d秒", pt.topicName, timeout.Seconds())
+	pt.log.Tracef("等待topic%s就绪，最多等待%f秒", pt.topicName, timeout.Seconds())
 	for time.Now().Before(deadline) {
 		partitions, err := pt.conn.ReadPartitions()
 		if err == nil {
