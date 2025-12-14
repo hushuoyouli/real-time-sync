@@ -240,7 +240,8 @@ func (pt *KafkaRuntimeEventHandle) waitForTopicReady(timeout time.Duration) bool
 
 func (p *KafkaRuntimeEventHandle) PostInitialize(behaviorTree iface.IBehaviorTree, nowtimestampInMilli int64) {
 	p.handle.PostInitialize(behaviorTree, nowtimestampInMilli)
-	p.sendMessage(behaviorTree.Config(), nowtimestampInMilli, "post_initialize", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //树初始化
+	p.sendMessage([]byte(strconv.FormatInt(int64(p.frameInterval), 10)), nowtimestampInMilli, "behavior_tree_frame_interval", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //树的帧率
+	p.sendMessage(behaviorTree.Config(), nowtimestampInMilli, "post_initialize", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID())                                              //树初始化
 }
 
 func (p *KafkaRuntimeEventHandle) PostOnComplete(behaviorTree iface.IBehaviorTree, nowtimestampInMilli int64) {
