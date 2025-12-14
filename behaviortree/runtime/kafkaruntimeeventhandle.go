@@ -27,13 +27,14 @@ type KafkaRuntimeEventHandle struct {
 	messageWriteWaitGroup sync.WaitGroup
 	messageWriteContext   context.Context
 	messageWriteCancel    context.CancelFunc
+	frameInterval         int //帧间隔，单位是毫秒，默认是100毫秒
 }
 
 // 触发自动创建 topic的消息
 
 // topicName,可以是场景的名字，或者是一场战斗的名字，系统自动加上时间
 // broker,可以是kafka的地址等等
-func NewKafkaRuntimeEventHandle(handle iface.IRuntimeEventHandle, topicName string, broker string, log rlog.ILogger) (*KafkaRuntimeEventHandle, error) {
+func NewKafkaRuntimeEventHandle(handle iface.IRuntimeEventHandle, topicName string, broker string, log rlog.ILogger, frameInterval int) (*KafkaRuntimeEventHandle, error) {
 	// 格式化当前时间，返回形如"20060102-150405"的字符串
 	nowTimeStr := time.Now().Format("20060102-150405.000")
 	topicName = topicName + "-" + nowTimeStr
@@ -73,6 +74,7 @@ func NewKafkaRuntimeEventHandle(handle iface.IRuntimeEventHandle, topicName stri
 		messageWriteContext:   messageWriteContext,
 		messageWriteCancel:    messageWriteCancel,
 		kafkaMessageChannel:   make(chan kafka.Message, 3000),
+		frameInterval:         frameInterval,
 	}
 
 	// 策略：先尝试发送消息（这会触发 topic 自动创建）

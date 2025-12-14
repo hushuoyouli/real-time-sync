@@ -113,7 +113,7 @@ func Test_BehaviorTree_Enable_Kafka(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	handle, err := NewKafkaRuntimeEventHandle(NewDefaultRuntimeEventHandle(), "test-topic", "localhost:9092", &rlog.SLogger{})
+	handle, err := NewKafkaRuntimeEventHandle(NewDefaultRuntimeEventHandle(), "test-topic", "localhost:9092", &rlog.SLogger{}, 30)
 	if err != nil {
 		t.Error(err)
 		return

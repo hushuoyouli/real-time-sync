@@ -274,7 +274,7 @@ func TestNewKafkaRuntimeEventHandle_Success(t *testing.T) {
 	mockHandle := &MockRuntimeEventHandle{}
 	logger := &rlog.SLogger{}
 
-	handle, err := NewKafkaRuntimeEventHandle(mockHandle, "test-topic", broker, logger)
+	handle, err := NewKafkaRuntimeEventHandle(mockHandle, "test-topic", broker, logger, 30)
 	if err != nil {
 		t.Fatalf("创建 KafkaRuntimeEventHandle 失败: %v", err)
 	}
@@ -308,7 +308,7 @@ func TestNewKafkaRuntimeEventHandle_InvalidBroker(t *testing.T) {
 	mockHandle := &MockRuntimeEventHandle{}
 	logger := &rlog.SLogger{}
 
-	handle, err := NewKafkaRuntimeEventHandle(mockHandle, "test-topic", "invalid-broker:9999", logger)
+	handle, err := NewKafkaRuntimeEventHandle(mockHandle, "test-topic", "invalid-broker:9999", logger, 30)
 	if err == nil {
 		if handle != nil {
 			handle.Close()
@@ -331,7 +331,7 @@ func TestKafkaRuntimeEventHandle_Close(t *testing.T) {
 	mockHandle := &MockRuntimeEventHandle{}
 	logger := &rlog.SLogger{}
 
-	handle, err := NewKafkaRuntimeEventHandle(mockHandle, "test-topic", broker, logger)
+	handle, err := NewKafkaRuntimeEventHandle(mockHandle, "test-topic", broker, logger, 30)
 	if err != nil {
 		t.Fatalf("创建 KafkaRuntimeEventHandle 失败: %v", err)
 	}
@@ -361,7 +361,7 @@ func TestKafkaRuntimeEventHandle_DelegationMethods(t *testing.T) {
 	mockHandle := &MockRuntimeEventHandle{}
 	logger := &rlog.SLogger{}
 
-	handle, err := NewKafkaRuntimeEventHandle(mockHandle, "test-topic", broker, logger)
+	handle, err := NewKafkaRuntimeEventHandle(mockHandle, "test-topic", broker, logger, 30)
 	if err != nil {
 		t.Fatalf("创建 KafkaRuntimeEventHandle 失败: %v", err)
 	}
@@ -487,7 +487,7 @@ func TestKafkaRuntimeEventHandle_TopicNameFormat(t *testing.T) {
 	logger := &rlog.SLogger{}
 
 	baseTopicName := "test-scenario"
-	handle1, err := NewKafkaRuntimeEventHandle(mockHandle, baseTopicName, broker, logger)
+	handle1, err := NewKafkaRuntimeEventHandle(mockHandle, baseTopicName, broker, logger, 30)
 	if err != nil {
 		t.Fatalf("创建 KafkaRuntimeEventHandle 失败: %v", err)
 	}
@@ -496,7 +496,7 @@ func TestKafkaRuntimeEventHandle_TopicNameFormat(t *testing.T) {
 	// 等待一小段时间确保时间戳不同
 	time.Sleep(100 * time.Millisecond)
 
-	handle2, err := NewKafkaRuntimeEventHandle(mockHandle, baseTopicName, broker, logger)
+	handle2, err := NewKafkaRuntimeEventHandle(mockHandle, baseTopicName, broker, logger, 30)
 	if err != nil {
 		t.Fatalf("创建第二个 KafkaRuntimeEventHandle 失败: %v", err)
 	}
@@ -545,7 +545,7 @@ func TestKafkaRuntimeEventHandle_SendMessage(t *testing.T) {
 	mockHandle := &MockRuntimeEventHandle{}
 	logger := &rlog.SLogger{}
 
-	handle, err := NewKafkaRuntimeEventHandle(mockHandle, "test-send-message", broker, logger)
+	handle, err := NewKafkaRuntimeEventHandle(mockHandle, "test-send-message", broker, logger, 30)
 	if err != nil {
 		t.Fatalf("创建 KafkaRuntimeEventHandle 失败: %v", err)
 	}
@@ -606,7 +606,7 @@ func TestKafkaRuntimeEventHandle_SendMessage_Multiple(t *testing.T) {
 	mockHandle := &MockRuntimeEventHandle{}
 	logger := &rlog.SLogger{}
 
-	handle, err := NewKafkaRuntimeEventHandle(mockHandle, "test-send-multiple", broker, logger)
+	handle, err := NewKafkaRuntimeEventHandle(mockHandle, "test-send-multiple", broker, logger, 30)
 	if err != nil {
 		t.Fatalf("创建 KafkaRuntimeEventHandle 失败: %v", err)
 	}
