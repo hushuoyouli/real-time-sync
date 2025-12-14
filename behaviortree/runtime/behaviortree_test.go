@@ -158,4 +158,6 @@ func Test_BehaviorTree_Enable_Kafka(t *testing.T) {
 	behaviorTree.Disable()
 	behaviorTree.Print()
 	behaviorTree.RebuildSync(rebuildSyncDataCollector)
+
+	t.Log(handle.topicName)
 }
