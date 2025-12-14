@@ -240,18 +240,41 @@ func (pt *KafkaRuntimeEventHandle) waitForTopicReady(timeout time.Duration) bool
 
 func (p *KafkaRuntimeEventHandle) PostInitialize(behaviorTree iface.IBehaviorTree, nowtimestampInMilli int64) {
 	p.handle.PostInitialize(behaviorTree, nowtimestampInMilli)
-	p.sendMessage([]byte(strconv.FormatInt(int64(p.frameInterval), 10)), nowtimestampInMilli, "behavior_tree_frame_interval", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //树的帧率
-	p.sendMessage(behaviorTree.Config(), nowtimestampInMilli, "post_initialize", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID())                                              //树初始化
+	data := map[string]interface{}{
+		"frame_interval": p.frameInterval,
+		"config":         behaviorTree.Config(),
+	}
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		p.log.Errorf("序列化数据失败: %v", err)
+		return
+	}
+	p.sendMessage(jsonData, nowtimestampInMilli, "post_initialize", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //树初始化
 }
 
 func (p *KafkaRuntimeEventHandle) PostOnComplete(behaviorTree iface.IBehaviorTree, nowtimestampInMilli int64) {
 	p.handle.PostOnComplete(behaviorTree, nowtimestampInMilli)
-	p.sendMessage(nil, nowtimestampInMilli, "post_complete", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //树完成
+	data := map[string]interface{}{}
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		p.log.Errorf("序列化数据失败: %v", err)
+		return
+	}
+	p.sendMessage(jsonData, nowtimestampInMilli, "post_complete", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //树完成
 }
 
 func (p *KafkaRuntimeEventHandle) NewStack(behaviorTree iface.IBehaviorTree, data *iface.StackRuntimeData) {
 	p.handle.NewStack(behaviorTree, data)
-	p.sendMessage([]byte(strconv.FormatInt(int64(data.StackID), 10)), behaviorTree.Clock().TimesampInMill(), "new_stack", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //新栈
+	data2 := map[string]interface{}{
+		"stack_id": data.StackID,
+	}
+	jsonData, err := json.Marshal(data2)
+	if err != nil {
+		p.log.Errorf("序列化数据失败: %v", err)
+		return
+	}
+	p.sendMessage(jsonData, behaviorTree.Clock().TimesampInMill(), "new_stack", behaviorTree.ID(), behaviorTree.Name(), behaviorTree.Unit().Name(), behaviorTree.Unit().ID()) //新栈
 }
 
 func (p *KafkaRuntimeEventHandle) RemoveStack(behaviorTree iface.IBehaviorTree, data *iface.StackRuntimeData, nowtimestampInMilli int64) {
